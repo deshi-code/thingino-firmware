@@ -28,35 +28,29 @@
           <div class="card-header">
             <h2 class="card-title">Live View</h2>
             <small>The actual footage from the camera</small>
-            <button type="button" class="btn btn-outline-secondary" id="preview-reload" title="Reload values from camera">
-              <i class="bi bi-arrow-clockwise"></i> Reload
-            </button>
+            <div class="preview-header-actions">
+              <button type="button" class="btn btn-outline-secondary" id="preview-reload" title="Reload values from camera">
+                <i class="bi bi-arrow-clockwise"></i> Reload
+              </button>
+            </div>
           </div><!-- .card-header -->
           <div class="card-body">
             <div id="frame" class="position-relative mb-2">
               <img id="preview" src="/a/nostream.svg" class="img-fluid" alt="Image: Preview" tabindex="-1" data-stream="ch0">
             </div>
-            <div class="position-absolute top-50 start-50 translate-middle" id="motor-overlay" style="display:none">
-              <div id="motor">
-                <div class="jst">
-                  <a class="s" data-dir="uc"></a>
-                  <a class="s" data-dir="ur"></a>
-                  <a class="s" data-dir="cr"></a>
-                  <a class="s" data-dir="dr"></a>
-                  <a class="s" data-dir="dc"></a>
-                  <a class="s" data-dir="dl"></a>
-                  <a class="s" data-dir="cl"></a>
-                  <a class="s" data-dir="ul"></a>
-                  <a class="b" data-dir="h"></a>
-                </div>
-              </div>
-            </div>
+            <!-- THINGINO_PLUGIN_PREVIEW_BODY -->
           </div>
         </div>
       </form>
       <div class="preview-endpoints text-center" id="preview-endpoints">
         <small>Direct endpoints. Click a link to copy its URL to clipboard.</small>
-        <div class="preview-endpoint-list mx-4" id="preview-endpoint-list"></div>
+        <div class="dropdown d-lg-none mt-2" id="preview-endpoint-dropdown">
+          <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+            <i class="bi bi-link-45deg"></i> Endpoints
+          </button>
+          <ul class="dropdown-menu" id="preview-endpoint-dropdown-menu"></ul>
+        </div>
+        <div class="preview-endpoint-list mx-4 d-none d-lg-inline-flex" id="preview-endpoint-list"></div>
       </div>
     </section>
   </div>
@@ -70,7 +64,5 @@
 <script src="/a/navigation.js"></script>
 <script src="/a/footer.js"></script>
 <script src="/a/preview.js"></script>
-<script src="/a/preview-motors.js"></script>
-
 </body>
 </html>

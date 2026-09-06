@@ -139,14 +139,6 @@
       dataset: { channel: "1" },
     });
 
-    // Timelapse button
-    const timelapseButton = createButton({
-      id: "timelapse",
-      title: "Timelapse",
-      icon: "bi bi-camera",
-      label: "Timelapse",
-    });
-
     // Dropdown toggle
     const toggle = createButton({
       className: "btn btn-secondary dropdown-toggle dropdown-toggle-split",
@@ -185,28 +177,8 @@
     recordItem.appendChild(recordLink);
     menu.appendChild(recordItem);
 
-    // Timelapse configuration link
-    const timelapseItem = document.createElement("li");
-    const timelapseLink = document.createElement("a");
-    timelapseLink.className = "dropdown-item";
-    timelapseLink.href = "/tool-timelapse.html";
-    timelapseLink.title = "Timelapse configuration";
-    if (isCurrentPath("/tool-timelapse.html")) {
-      timelapseLink.classList.add("active");
-      timelapseLink.setAttribute("aria-current", "page");
-    }
-    appendLabelWithIcon(
-      timelapseLink,
-      "bi bi-stopwatch",
-      "Timelapse configuration",
-      "Timelapse settings",
-    );
-    timelapseItem.appendChild(timelapseLink);
-    menu.appendChild(timelapseItem);
-
     group.appendChild(ch0Button);
     group.appendChild(ch1Button);
-    group.appendChild(timelapseButton);
     group.appendChild(toggle);
     group.appendChild(menu);
     return group;
@@ -761,9 +733,12 @@
     privacyBtn.classList.add("flex-fill");
     bar.appendChild(privacyBtn);
 
-    const wireguardBtn = createWireGuardButton();
-    wireguardBtn.classList.add("flex-fill");
-    bar.appendChild(wireguardBtn);
+    var uiConfig = window.thinginoUIConfig || {};
+    if (uiConfig.device && uiConfig.device.wireguard) {
+      var wireguardBtn = createWireGuardButton();
+      wireguardBtn.classList.add("flex-fill");
+      bar.appendChild(wireguardBtn);
+    }
 
     const sendBtn = createSendButton();
     sendBtn.classList.add("flex-fill");
@@ -777,31 +752,22 @@
     audioBtn.classList.add("flex-fill");
     bar.appendChild(audioBtn);
 
-    const recorderBtn = createRecorderGroup();
-    recorderBtn.classList.add("flex-fill");
-    bar.appendChild(recorderBtn);
+    // The recording configuration page (tool-record.html) is owned by the
+    // prudynt plugin and is prudynt.json-backed.  Raptor records natively
+    // via rmr and has no such page — hide the button there.
+    const isRaptor = uiConfig.device && uiConfig.device.raptor === true;
+    if (!isRaptor) {
+      const recorderBtn = createRecorderGroup();
+      recorderBtn.classList.add("flex-fill");
+      bar.appendChild(recorderBtn);
+    }
 
     return bar;
-  }
-
-  function buildTimeColumn(className) {
-    const col = document.createElement("div");
-    col.className = className;
-    const link = document.createElement("a");
-    link.href = "/config-time.html";
-    link.id = "time-now";
-    link.className =
-      "link-underline link-underline-opacity-0 link-underline-opacity-75-hover";
-    col.appendChild(link);
-    return col;
   }
 
   function buildControlRow(placeholder) {
     const defaults = {
       wrapperClass: globalConfig.wrapperClass || "",
-      timeRowClass:
-        globalConfig.timeRowClass || "row my-2 x-small align-items-center",
-      timeColClass: globalConfig.clockColClass || "col-12 text-lg-end",
       buttonRowClass:
         globalConfig.rowClass || "row my-2 x-small align-items-center",
       buttonColClass: globalConfig.btnColClass || "col-12",
@@ -813,15 +779,6 @@
     if (wrapperClass) wrapper.className = wrapperClass;
     wrapper.setAttribute("data-generated-controls", "true");
 
-    const timeRow = document.createElement("div");
-    timeRow.className =
-      placeholder.dataset.clockRow ||
-      placeholder.dataset.timeRow ||
-      defaults.timeRowClass;
-    timeRow.appendChild(
-      buildTimeColumn(placeholder.dataset.clockCol || defaults.timeColClass),
-    );
-
     const buttonRow = document.createElement("div");
     buttonRow.className =
       placeholder.dataset.rowClass || defaults.buttonRowClass;
@@ -830,7 +787,6 @@
     buttonCol.appendChild(buildButtonBar());
     buttonRow.appendChild(buttonCol);
 
-    wrapper.appendChild(timeRow);
     wrapper.appendChild(buttonRow);
     return wrapper;
   }

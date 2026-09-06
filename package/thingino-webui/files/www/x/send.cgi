@@ -1,4 +1,5 @@
 #!/bin/sh
+# shellcheck disable=SC1091,SC2086,SC2329,SC3043
 
 # Check authentication
 . /var/www/x/auth.sh
@@ -212,7 +213,7 @@ case "$target" in
 			json_ok "Sent to $target"
 		fi
 		;;
-	email | ftp | gotify | gphotos | mqtt | ntfy | storage | webhook)
+	email | ftp | gotify | gphotos | mqtt | ntfy | pushover | storage | webhook | xmpp)
 		webui_log "send.cgi: target=$target, type=$type, opts='$opts', verbose_flag='$verbose_flag'"
 		if [ -n "$verbose_flag" ]; then
 			if [ -n "$opts" ]; then
@@ -233,6 +234,17 @@ case "$target" in
 			json_ok "Sent to $target"
 		fi
 		;;
+	speaker)
+		webui_log "send.cgi: target=speaker, verbose_flag='$verbose_flag'"
+		if [ -n "$verbose_flag" ]; then
+			webui_log "Running: playonspeaker $verbose_flag"
+			run_verbose playonspeaker $verbose_flag
+		else
+			webui_log "Running: playonspeaker"
+			playonspeaker >/dev/null &
+			json_ok "Speaker test sent"
+		fi
+		;;
 	termbin)
 		case ${POST_file:-$GET_file} in
 			weblog)
@@ -243,7 +255,8 @@ case "$target" in
 				url=$($cmd | send2termbin)
 				;;
 		esac
-		redirect_to $url
+		[ -n "$url" ] || redirect_back "danger" "Upload failed"
+		redirect_to "$url"
 		;;
 	*)
 		redirect_back "danger" "Unknown target $target"

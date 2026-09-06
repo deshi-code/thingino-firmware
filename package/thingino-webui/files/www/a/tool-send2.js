@@ -7,19 +7,31 @@
     ftp: { photo: true, video: true },
     telegram: { photo: true, video: true },
     gotify: { photo: false, video: false },
+    pushover: { photo: true, video: false },
     mqtt: { photo: true, video: false },
     webhook: { photo: true, video: true },
     storage: { photo: true, video: true },
     ntfy: { photo: true, video: false },
     gphotos: { photo: true, video: true },
+    xmpp: { photo: true, video: false },
   };
 
   const motionEnabledInput = $("#motion_enabled");
+  const motionPlayOnSpeakerInput = $("#motion_playonspeaker");
   const motionSensitivityInput = $("#motion_sensitivity");
   const motionSensitivityValue = $("#motion_sensitivity_value");
   const motionCooldownInput = $("#motion_cooldown");
   const motionCooldownValue = $("#motion_cooldown_value");
-  const saveMotionButton = $("#save_motion");
+  const saveAllButton = $("#save_all");
+
+  // Speaker elements
+  const speakerFileInput = $("#speaker_file");
+  const speakerVolumeInput = $("#speaker_volume");
+  const speakerVolumeValue = $("#speaker_volume_value");
+  const speakerGainInput = $("#speaker_gain");
+  const speakerGainValue = $("#speaker_gain_value");
+  const speakerLoopInput = $("#speaker_loop");
+  const testSpeakerButton = $("#test_speaker");
 
   // Update slider value displays
   if (motionSensitivityInput) {
@@ -34,6 +46,22 @@
     motionCooldownInput.addEventListener("input", () => {
       if (motionCooldownValue) {
         motionCooldownValue.textContent = motionCooldownInput.value;
+      }
+    });
+  }
+
+  if (speakerVolumeInput) {
+    speakerVolumeInput.addEventListener("input", () => {
+      if (speakerVolumeValue) {
+        speakerVolumeValue.textContent = speakerVolumeInput.value;
+      }
+    });
+  }
+
+  if (speakerGainInput) {
+    speakerGainInput.addEventListener("input", () => {
+      if (speakerGainValue) {
+        speakerGainValue.textContent = speakerGainInput.value;
       }
     });
   }
@@ -78,6 +106,10 @@
         if (motionEnabledInput)
           motionEnabledInput.checked =
             data.motion.enabled === true || data.motion.enabled === "true";
+        if (motionPlayOnSpeakerInput)
+          motionPlayOnSpeakerInput.checked =
+            data.motion.playonspeaker === true ||
+            data.motion.playonspeaker === "true";
         if (motionSensitivityInput) {
           motionSensitivityInput.value = data.motion.sensitivity || 4;
           if (motionSensitivityValue)
@@ -95,11 +127,13 @@
           "ftp",
           "telegram",
           "gotify",
+          "pushover",
           "mqtt",
           "webhook",
           "storage",
           "ntfy",
           "gphotos",
+          "xmpp",
         ];
         services.forEach((service) => {
           const checkbox = $(`#motion_send2${service}`);
@@ -117,11 +151,13 @@
         "ftp",
         "telegram",
         "gotify",
+        "pushover",
         "mqtt",
         "webhook",
         "storage",
         "ntfy",
         "gphotos",
+        "xmpp",
       ];
       services.forEach((service) => {
         const serviceData = data[service];
@@ -155,6 +191,22 @@
           setStatus(videoStatus, sendVideo);
         }
       });
+
+      // Apply speaker settings
+      if (data.speaker) {
+        if (speakerFileInput) speakerFileInput.value = data.speaker.file || "";
+        if (speakerVolumeInput) {
+          speakerVolumeInput.value = data.speaker.volume ?? 80;
+          if (speakerVolumeValue)
+            speakerVolumeValue.textContent = speakerVolumeInput.value;
+        }
+        if (speakerGainInput) {
+          speakerGainInput.value = data.speaker.gain ?? 20;
+          if (speakerGainValue)
+            speakerGainValue.textContent = speakerGainInput.value;
+        }
+        if (speakerLoopInput) speakerLoopInput.value = data.speaker.loop ?? 1;
+      }
     } catch (err) {
       console.error("Failed to load config:", err);
       showAlert(
@@ -166,22 +218,31 @@
     }
   }
 
-  async function saveMotionSettings() {
-    if (!saveMotionButton) return;
+  async function saveAllSettings() {
+    if (!saveAllButton) return;
 
-    showBusy("Saving motion settings...");
-    saveMotionButton.disabled = true;
+    showBusy("Saving settings...");
+    saveAllButton.disabled = true;
 
     try {
       const payload = {
         motion: {
           enabled: motionEnabledInput ? motionEnabledInput.checked : false,
+          playonspeaker: motionPlayOnSpeakerInput
+            ? motionPlayOnSpeakerInput.checked
+            : false,
           sensitivity: motionSensitivityInput
             ? Number(motionSensitivityInput.value)
             : 4,
           cooldown_time: motionCooldownInput
             ? Number(motionCooldownInput.value)
             : 15,
+        },
+        speaker: {
+          file: speakerFileInput ? speakerFileInput.value : "",
+          volume: speakerVolumeInput ? Number(speakerVolumeInput.value) : 80,
+          gain: speakerGainInput ? Number(speakerGainInput.value) : 20,
+          loop: speakerLoopInput ? Number(speakerLoopInput.value) : 1,
         },
       };
 
@@ -199,14 +260,39 @@
         throw new Error(result.error.message || "Failed to save settings");
       }
 
-      showAlert("success", "Motion settings saved successfully.", 3000);
+      showAlert("success", "Settings saved successfully.", 3000);
     } catch (err) {
-      console.error("Failed to save motion settings:", err);
+      console.error("Failed to save settings:", err);
       showAlert("danger", `Failed to save settings: ${err.message || err}`);
     } finally {
       hideBusy();
-      saveMotionButton.disabled = false;
+      saveAllButton.disabled = false;
     }
+  }
+
+  function testSpeaker() {
+    if (!testSpeakerButton) return;
+    testSpeakerButton.disabled = true;
+
+    const params = new URLSearchParams({ to: "speaker" });
+    fetch(`/x/send.cgi?${params.toString()}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.error) {
+          showAlert(
+            "danger",
+            `Speaker test failed: ${data.error.message || data.error}`,
+          );
+        } else {
+          showAlert("success", "Speaker test played.", 3000);
+        }
+      })
+      .catch((err) => {
+        showAlert("danger", `Speaker test failed: ${err}`);
+      })
+      .finally(() => {
+        testSpeakerButton.disabled = false;
+      });
   }
 
   // Handle motion service toggles
@@ -288,8 +374,12 @@
     });
   });
 
-  if (saveMotionButton) {
-    saveMotionButton.addEventListener("click", saveMotionSettings);
+  if (saveAllButton) {
+    saveAllButton.addEventListener("click", saveAllSettings);
+  }
+
+  if (testSpeakerButton) {
+    testSpeakerButton.addEventListener("click", testSpeaker);
   }
 
   loadConfig();

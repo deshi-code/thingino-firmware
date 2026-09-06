@@ -64,21 +64,17 @@ def format_partition_table(partitions, format_type='decimal'):
 def generate_mtdparts_string(
     u_boot_kb,
     ub_env_kb,
-    config_kb,
+    backup_kb,
     kernel_kb,
     rootfs_kb,
-    extras_kb,
-    extras_offset,
-    upgrade_kb,
-    kernel_offset,
+    data_kb,
     flash_kb,
     flash_controller="jz_sfc",
 ):
     """Generate MTD partitions string."""
     return (
-        f"mtdparts={flash_controller}:{u_boot_kb}k(boot),{ub_env_kb}k(env),{config_kb}k(config),"
-        f"{kernel_kb}k(kernel),{rootfs_kb}k(rootfs),{extras_kb}k@0x{extras_offset:x}(extras),"
-        f"{upgrade_kb}k@0x{kernel_offset:x}(upgrade),"
+        f"mtdparts={flash_controller}:{u_boot_kb}k(boot),{ub_env_kb}k(env),"
+        f"{backup_kb}k(backup),{kernel_kb}k(kernel),{rootfs_kb}k(rootfs),{data_kb}k(data),"
         f"{flash_kb}k@0(all)"
     )
 
@@ -88,6 +84,17 @@ def format_duration(duration_seconds):
     hours, remainder = divmod(max(duration_seconds, 0), 3600)
     minutes, seconds = divmod(remainder, 60)
     return f"{hours}:{minutes:02d}:{seconds:02d}"
+
+
+def format_bytes(size_bytes):
+    """Format a byte count as a compact human-readable string."""
+    for unit in ('B', 'K', 'M', 'G', 'T'):
+        if size_bytes < 1024 or unit == 'T':
+            if unit == 'B':
+                return f"{int(size_bytes)}B"
+            return f"{size_bytes:.1f}{unit}".replace('.0', '')
+        size_bytes /= 1024
+    return f"{size_bytes}B"
 
 
 def main():
@@ -106,29 +113,29 @@ def main():
     parser.add_argument('ub_env_partition_size', type=int)
     parser.add_argument('ub_env_bin_size', type=int)
     parser.add_argument('ub_env_bin_size_aligned', type=int)
-    parser.add_argument('config_offset', type=int)
-    parser.add_argument('config_partition_size', type=int)
-    parser.add_argument('config_bin_size', type=int)
-    parser.add_argument('config_bin_size_aligned', type=int)
+    parser.add_argument('backup_offset', type=int)
+    parser.add_argument('backup_partition_size', type=int)
+    parser.add_argument('backup_bin_size', type=int)
+    parser.add_argument('backup_bin_size_aligned', type=int)
     parser.add_argument('kernel_offset', type=int)
     parser.add_argument('kernel_partition_size', type=int)
     parser.add_argument('kernel_bin_size', type=int)
     parser.add_argument('rootfs_offset', type=int)
     parser.add_argument('rootfs_partition_size', type=int)
     parser.add_argument('rootfs_bin_size', type=int)
-    parser.add_argument('extras_offset', type=int)
-    parser.add_argument('extras_partition_size', type=int)
-    parser.add_argument('extras_bin_size', type=int)
-    parser.add_argument('extras_bin_size_aligned', type=int)
+    parser.add_argument('data_offset', type=int)
+    parser.add_argument('data_partition_size', type=int)
+    parser.add_argument('data_bin_size', type=int)
+    parser.add_argument('data_bin_size_aligned', type=int)
     parser.add_argument('u_boot_size_kb', type=int)
     parser.add_argument('ub_env_size_kb', type=int)
-    parser.add_argument('config_size_kb', type=int)
+    parser.add_argument('backup_size_kb', type=int)
     parser.add_argument('kernel_size_kb', type=int)
     parser.add_argument('rootfs_size_kb', type=int)
-    parser.add_argument('extras_size_kb', type=int)
-    parser.add_argument('upgrade_size_kb', type=int)
+    parser.add_argument('data_size_kb', type=int)
     parser.add_argument('flash_size_kb', type=int)
     parser.add_argument('build_duration_seconds', type=int)
+    parser.add_argument('disk_bytes_written', type=int)
     parser.add_argument('flash_controller', nargs='?', default='jz_sfc')
 
     args = parser.parse_args()
@@ -150,11 +157,11 @@ def main():
             'aligned': args.ub_env_bin_size_aligned,
         },
         {
-            'name': 'CONFIG',
-            'offset': args.config_offset,
-            'pt_size': args.config_partition_size,
-            'content': args.config_bin_size,
-            'aligned': args.config_bin_size_aligned,
+            'name': 'BACKUP',
+            'offset': args.backup_offset,
+            'pt_size': args.backup_partition_size,
+            'content': args.backup_bin_size,
+            'aligned': args.backup_bin_size_aligned,
         },
         {
             'name': 'KERNEL',
@@ -171,11 +178,11 @@ def main():
             'aligned': args.rootfs_partition_size,
         },
         {
-            'name': 'EXTRAS',
-            'offset': args.extras_offset,
-            'pt_size': args.extras_partition_size,
-            'content': args.extras_bin_size,
-            'aligned': args.extras_bin_size_aligned,
+            'name': 'DATA',
+            'offset': args.data_offset,
+            'pt_size': args.data_partition_size,
+            'content': args.data_bin_size,
+            'aligned': args.data_bin_size_aligned,
         },
     ]
 
@@ -184,9 +191,8 @@ def main():
 
     # Generate mtdparts string
     generated_mtdparts = generate_mtdparts_string(
-        args.u_boot_size_kb, args.ub_env_size_kb, args.config_size_kb,
-        args.kernel_size_kb, args.rootfs_size_kb, args.extras_size_kb,
-        args.extras_offset, args.upgrade_size_kb, args.kernel_offset,
+        args.u_boot_size_kb, args.ub_env_size_kb, args.backup_size_kb,
+        args.kernel_size_kb, args.rootfs_size_kb, args.data_size_kb,
         args.flash_size_kb, args.flash_controller
     )
 
@@ -209,7 +215,7 @@ MTD Partition Details
 
 Build: {args.git_branch}+{args.git_hash}, {args.build_date}
 Build Duration: {format_duration(args.build_duration_seconds)} ({args.build_duration_seconds}s)
-
+Disk Writes: {format_bytes(args.disk_bytes_written)} ({args.disk_bytes_written} bytes)
 """
 
     # Write to file

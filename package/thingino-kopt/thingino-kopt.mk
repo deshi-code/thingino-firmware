@@ -42,15 +42,47 @@ endif
 
 ################ MMC #########################
 ifeq ($(BR2_PACKAGE_THINGINO_KOPT_MMC),y)
-define THINGINO_KOPT_LINUX_CONFIG_FIXUPS_MMC
+
+ifeq ($(BR2_mips_xburst2),y)
+# XBurst2 drives its MSC through sdhci-ingenic, which binds the "ingenic,sdhci"
+# nodes the device tree declares. The jzmmc driver below does not exist here.
+#
+# Built as modules: root lives on SFC NOR/NAND, so nothing needs MMC before
+# userspace. S09mmc loads the host driver, which runs before S36wireless, so an
+# SDIO wifi part still finds its bus. Keeping this out of the kernel image is
+# what lets the 4.4 XBurst2 kernel fit the 1600 KiB partition.
+define THINGINO_KOPT_LINUX_CONFIG_FIXUPS_MMC_HOST
+	$(call KCONFIG_SET_OPT,CONFIG_MMC,m)
+	$(call KCONFIG_SET_OPT,CONFIG_MMC_BLOCK,m)
+	$(call KCONFIG_SET_OPT,CONFIG_MMC_SDHCI,m)
+	$(call KCONFIG_SET_OPT,CONFIG_MMC_SDHCI_INGENIC,m)
+endef
+# A card slot is expected to mount FAT32; exfat comes from exfat-nofuse.
+# Modular like the rest of the MMC stack - S09mmc loads vfat next to
+# mmc_block, before any card can be automounted. Keeps ~19 KiB out of the
+# kernel image, which the 4.4 XBurst2 kernel cannot spare on a NOR part.
+define THINGINO_KOPT_LINUX_CONFIG_FIXUPS_MMC_FS
+	$(call KCONFIG_SET_OPT,CONFIG_FAT_FS,m)
+	$(call KCONFIG_SET_OPT,CONFIG_VFAT_FS,m)
+	$(call KCONFIG_SET_OPT,CONFIG_FAT_DEFAULT_CODEPAGE,437)
+	$(call KCONFIG_SET_OPT,CONFIG_FAT_DEFAULT_IOCHARSET,"iso8859-1")
+endef
+else
+define THINGINO_KOPT_LINUX_CONFIG_FIXUPS_MMC_HOST
 	$(call KCONFIG_ENABLE_OPT,CONFIG_MMC)
 	$(call KCONFIG_ENABLE_OPT,CONFIG_MMC_BLOCK)
-	$(call KCONFIG_SET_OPT,CONFIG_MMC_BLOCK_MINORS,8)
-	$(call KCONFIG_ENABLE_OPT,CONFIG_MMC_BLOCK_BOUNCE)
 	$(if $(BR2_PACKAGE_THINGINO_KOPT_MMC0_BOOT), \
 		$(call KCONFIG_ENABLE_OPT,CONFIG_JZMMC_V12), \
 		$(call KCONFIG_SET_OPT,CONFIG_JZMMC_V12,m))
 	$(call KCONFIG_ENABLE_OPT,CONFIG_JZMMC_V12_SDMA)
+endef
+endif
+
+define THINGINO_KOPT_LINUX_CONFIG_FIXUPS_MMC
+	$(call THINGINO_KOPT_LINUX_CONFIG_FIXUPS_MMC_HOST)
+	$(call KCONFIG_SET_OPT,CONFIG_MMC_BLOCK_MINORS,8)
+	$(call KCONFIG_ENABLE_OPT,CONFIG_MMC_BLOCK_BOUNCE)
+	$(call THINGINO_KOPT_LINUX_CONFIG_FIXUPS_MMC_FS)
 endef
 endif
 ifeq ($(BR2_PACKAGE_THINGINO_KOPT_MMC0),y)
@@ -173,6 +205,13 @@ define THINGINO_KOPT_LINUX_CONFIG_FIXUPS_UART2
 endef
 endif
 
+ifeq ($(BR2_PACKAGE_THINGINO_KOPT_SLIP),y)
+define THINGINO_KOPT_LINUX_CONFIG_FIXUPS_SLIP
+	$(call KCONFIG_ENABLE_OPT,CONFIG_SLIP)
+	$(call KCONFIG_ENABLE_OPT,CONFIG_SLIP_COMPRESSED)
+endef
+endif
+
 ################ RTC #########################
 ifeq ($(BR2_PACKAGE_THINGINO_KOPT_RTC),y)
 define THINGINO_KOPT_LINUX_CONFIG_FIXUPS_RTC
@@ -224,10 +263,34 @@ define THINGINO_KOPT_LINUX_CONFIG_FIXUPS_I2C1
 endef
 endif
 
+ifeq ($(BR2_PACKAGE_THINGINO_KOPT_I2C_BUS1_PB25_PB26),y)
+define THINGINO_KOPT_LINUX_CONFIG_FIXUPS_I2C1_PB25_PB26
+	$(call KCONFIG_ENABLE_OPT,CONFIG_I2C1_PB25_PB26)
+endef
+endif
+
+ifeq ($(BR2_PACKAGE_THINGINO_KOPT_I2C_BUS1_PA16_PA17),y)
+define THINGINO_KOPT_LINUX_CONFIG_FIXUPS_I2C1_PA16_PA17
+	$(call KCONFIG_ENABLE_OPT,CONFIG_I2C1_PA16_PA17)
+endef
+endif
+
 ifeq ($(BR2_PACKAGE_THINGINO_KOPT_I2C_BUS2),y)
 define THINGINO_KOPT_LINUX_CONFIG_FIXUPS_I2C2
 	$(call KCONFIG_ENABLE_OPT,CONFIG_I2C2_V12_JZ)
 	$(call KCONFIG_SET_OPT,CONFIG_I2C2_SPEED,100)
+endef
+endif
+
+ifeq ($(BR2_PACKAGE_THINGINO_KOPT_I2C_BUS2_PB20_PB21),y)
+define THINGINO_KOPT_LINUX_CONFIG_FIXUPS_I2C2_PB20_PB21
+	$(call KCONFIG_ENABLE_OPT,CONFIG_I2C2_PB20_PB21)
+endef
+endif
+
+ifeq ($(BR2_PACKAGE_THINGINO_KOPT_I2C_BUS2_PB27_PB28),y)
+define THINGINO_KOPT_LINUX_CONFIG_FIXUPS_I2C2_PB27_PB28
+	$(call KCONFIG_ENABLE_OPT,CONFIG_I2C2_PB27_PB28)
 endef
 endif
 
@@ -252,15 +315,26 @@ define THINGINO_KOPT_LINUX_CONFIG_FIXUPS_LEDS
 endef
 endif
 
-################ USB MASS STORAGE##################
+################ USB MASS STORAGE ##################
 
 ifeq ($(BR2_PACKAGE_THINGINO_KOPT_USB_MASS_STORAGE),y)
+ifeq ($(SOC_FAMILY),a1)
+# SCSI and sd stay built in on the A1: its SATA needs them, and the vendor tree
+# cannot build ATA modular at all - libata-core.c calls sata_phy_reset(), which
+# ahci_ingenic.c defines, so libata.ko would need a symbol from a module that
+# depends on it. Only the USB half is modular, out of /etc/modules.d/30-storage.
 define THINGINO_KOPT_LINUX_CONFIG_FIXUPS_USB_MASS_STORAGE
-	$(call KCONFIG_ENABLE_OPT,CONFIG_USB_STORAGE)
+	$(call KCONFIG_ENABLE_OPT,CONFIG_SCSI)
+	$(call KCONFIG_ENABLE_OPT,CONFIG_BLK_DEV_SD)
+	$(call KCONFIG_SET_OPT,CONFIG_USB_STORAGE,m)
+endef
+else
+define THINGINO_KOPT_LINUX_CONFIG_FIXUPS_USB_MASS_STORAGE
 	$(call KCONFIG_ENABLE_OPT,CONFIG_SCSI)
 	$(call KCONFIG_ENABLE_OPT,CONFIG_BLK_DEV_SD)
 	$(call KCONFIG_ENABLE_OPT,CONFIG_USB_STORAGE)
 endef
+endif
 endif
 
 ################ EXT2/EXT4 FS #########################
@@ -362,7 +436,9 @@ endif
 
 ifeq ($(BR2_PACKAGE_THINGINO_KOPT_GADGET_WEBCAM),y)
 ifneq ($(KERNEL_VERSION_7),y)
-ifneq ($(SOC_FAMILY),t20)
+# T10 and T20 (3.10 vendor trees) die in early boot when the V4L2 stack is
+# flipped to modules - keep it builtin there and only add the webcam gadget.
+ifeq ($(filter t10 t20,$(SOC_FAMILY)),)
 define THINGINO_KOPT_LINUX_CONFIG_FIXUPS_GADGET_WEBCAM
 	$(call KCONFIG_SET_OPT,CONFIG_MEDIA_SUPPORT,m)
 	$(call KCONFIG_SET_OPT,CONFIG_VIDEO_DEV,m)
@@ -381,7 +457,7 @@ endif
 endif
 endif
 
-################### AUDIO #### #########################
+################### AUDIO #############################
 
 ifeq ($(BR2_PACKAGE_THINGINO_KOPT_DMIC),y)
 define THINGINO_KOPT_LINUX_CONFIG_FIXUPS_AUDIO_DMIC
@@ -389,10 +465,12 @@ define THINGINO_KOPT_LINUX_CONFIG_FIXUPS_AUDIO_DMIC
 endef
 endif
 
-################   NETFILTER   #########################
-ifeq ($(BR2_PACKAGE_THINGINO_KOPT_NETFILTER),y)
-define THINGINO_KOPT_LINUX_CONFIG_FIXUPS_NETFILTER
-	$(call KCONFIG_ENABLE_OPT,CONFIG_IP_ADVANCED_ROUTER)
+################### IPV6 ##############################
+ifeq ($(BR2_PACKAGE_THINGINO_KOPT_IPV6),y)
+# ip6tables is not here - it needs the netfilter core, which no base config
+# carries, so enabling it from this option only produced modules that nothing
+# could load. It lives with the NETFILTER option below.
+define THINGINO_KOPT_LINUX_CONFIG_FIXUPS_IPV6
 	$(call KCONFIG_ENABLE_OPT,CONFIG_IPV6)
 	$(call KCONFIG_ENABLE_OPT,CONFIG_IPV6_PRIVACY)
 	$(call KCONFIG_ENABLE_OPT,CONFIG_IPV6_ROUTER_PREF)
@@ -403,6 +481,20 @@ define THINGINO_KOPT_LINUX_CONFIG_FIXUPS_NETFILTER
 	$(call KCONFIG_ENABLE_OPT,CONFIG_IPV6_MULTIPLE_TABLES)
 	$(call KCONFIG_ENABLE_OPT,CONFIG_IPV6_SUBTREES)
 	$(call KCONFIG_ENABLE_OPT,CONFIG_IPV6_MROUTE)
+endef
+define THINGINO_KOPT_INSTALL_TARGET_CMDS_IPV6
+	$(INSTALL) -D -m 0755 $(THINGINO_KOPT_PKGDIR)/files/dhcpv6.script $(TARGET_DIR)/usr/lib/netifd/dhcpv6.script
+	$(INSTALL) -D -m 0755 $(THINGINO_KOPT_PKGDIR)/files/odhcp6c $(TARGET_DIR)/etc/network/if-up.d/odhcp6c
+	mkdir -p $(TARGET_DIR)/etc/network/if-down.d
+	ln -sf ../if-up.d/odhcp6c $(TARGET_DIR)/etc/network/if-down.d/odhcp6c
+	cat $(THINGINO_KOPT_PKGDIR)/files/hosts.ipv6 >> $(TARGET_DIR)/etc/hosts
+endef
+endif
+
+################### NETFILTER #########################
+ifeq ($(BR2_PACKAGE_THINGINO_KOPT_NETFILTER),y)
+define THINGINO_KOPT_LINUX_CONFIG_FIXUPS_NETFILTER
+	$(call KCONFIG_ENABLE_OPT,CONFIG_IP_ADVANCED_ROUTER)
 	$(call KCONFIG_ENABLE_OPT,CONFIG_NETFILTER)
 	$(call KCONFIG_ENABLE_OPT,CONFIG_NETFILTER_ADVANCED)
 	$(call KCONFIG_SET_OPT,CONFIG_NF_CONNTRACK,m)
@@ -419,11 +511,42 @@ define THINGINO_KOPT_LINUX_CONFIG_FIXUPS_NETFILTER
 	$(call KCONFIG_SET_OPT,CONFIG_IP_NF_FILTER,m)
 	$(call KCONFIG_SET_OPT,CONFIG_IP_NF_TARGET_REJECT,m)
 	$(call KCONFIG_SET_OPT,CONFIG_IP_NF_MANGLE,m)
+	$(call KCONFIG_SET_OPT,CONFIG_DNS_RESOLVER,m)
+endef
+define THINGINO_KOPT_INSTALL_TARGET_CMDS_NETFILTER
+	cat $(THINGINO_KOPT_PKGDIR)/files/sysctl.netfilter >> $(TARGET_DIR)/etc/sysctl.conf
+endef
+
+# ip6tables needs both the netfilter core (above) and IPv6.
+ifeq ($(BR2_PACKAGE_THINGINO_KOPT_IPV6),y)
+define THINGINO_KOPT_LINUX_CONFIG_FIXUPS_NETFILTER6
 	$(call KCONFIG_SET_OPT,CONFIG_IP6_NF_IPTABLES,m)
 	$(call KCONFIG_SET_OPT,CONFIG_IP6_NF_FILTER,m)
 	$(call KCONFIG_SET_OPT,CONFIG_IP6_NF_TARGET_REJECT,m)
 	$(call KCONFIG_SET_OPT,CONFIG_IP6_NF_MANGLE,m)
-	$(call KCONFIG_SET_OPT,CONFIG_DNS_RESOLVER,m)
+endef
+endif
+endif
+
+################ WIREGUARD UDP TUNNEL #########################
+
+# wireguard needs udp_tunnel_xmit_skb() and friends, which live in
+# CONFIG_NET_UDP_TUNNEL. That symbol has no prompt, so buildroot's
+# wireguard-linux-compat reaches it by enabling NET_FOU, the one visible
+# selector - and NET_FOU also selects XFRM, which is a bool and so lands
+# built in. wireguard's source references neither fou nor xfrm; it just
+# needs the four udp_tunnel symbols. Take the dependency through VXLAN
+# instead, the cheapest selector that does not drag XFRM in, and the whole
+# IPsec framework leaves every image. br2-external fixups are applied after
+# buildroot's, so this wins over the package.
+#
+# 4.4 only. On 3.10 there is no include/net/udp_tunnel.h, so wireguard builds
+# its own bundled udp_tunnel shim and needs none of this; enabling VXLAN there
+# would only add a module nothing loads.
+ifeq ($(BR2_PACKAGE_WIREGUARD_LINUX_COMPAT)$(KERNEL_VERSION_4),yy)
+define THINGINO_KOPT_LINUX_CONFIG_FIXUPS_WIREGUARD_UDP_TUNNEL
+	$(call KCONFIG_DISABLE_OPT,CONFIG_NET_FOU)
+	$(call KCONFIG_SET_OPT,CONFIG_VXLAN,m)
 endef
 endif
 
@@ -452,21 +575,39 @@ define THINGINO_KOPT_LINUX_CONFIG_FIXUPS
 	$(call THINGINO_KOPT_LINUX_CONFIG_FIXUPS_SPI1_PB2)
 	$(call THINGINO_KOPT_LINUX_CONFIG_FIXUPS_UART0)
 	$(call THINGINO_KOPT_LINUX_CONFIG_FIXUPS_UART2)
+	$(call THINGINO_KOPT_LINUX_CONFIG_FIXUPS_SLIP)
 	$(call THINGINO_KOPT_LINUX_CONFIG_FIXUPS_CIFS)
 	$(call THINGINO_KOPT_LINUX_CONFIG_FIXUPS_LEDS)
 	$(call THINGINO_KOPT_LINUX_CONFIG_FIXUPS_ADC)
 	$(call THINGINO_KOPT_LINUX_CONFIG_FIXUPS_DEVELOP)
 	$(call THINGINO_KOPT_LINUX_CONFIG_FIXUPS_GADGET_SERIAL)
 	$(call THINGINO_KOPT_LINUX_CONFIG_FIXUPS_GADGET_WEBCAM)
+	$(call THINGINO_KOPT_LINUX_CONFIG_FIXUPS_IPV6)
 	$(call THINGINO_KOPT_LINUX_CONFIG_FIXUPS_NETFILTER)
+	$(call THINGINO_KOPT_LINUX_CONFIG_FIXUPS_NETFILTER6)
 	$(call THINGINO_KOPT_LINUX_CONFIG_FIXUPS_I2C1)
+	$(call THINGINO_KOPT_LINUX_CONFIG_FIXUPS_I2C1_PB25_PB26)
+	$(call THINGINO_KOPT_LINUX_CONFIG_FIXUPS_I2C1_PA16_PA17)
 	$(call THINGINO_KOPT_LINUX_CONFIG_FIXUPS_I2C2)
+	$(call THINGINO_KOPT_LINUX_CONFIG_FIXUPS_I2C2_PB20_PB21)
+	$(call THINGINO_KOPT_LINUX_CONFIG_FIXUPS_I2C2_PB27_PB28)
 	$(call THINGINO_KOPT_LINUX_CONFIG_FIXUPS_USB_MASS_STORAGE)
 	$(call THINGINO_KOPT_LINUX_CONFIG_FIXUPS_EXTFS)
 	$(call THINGINO_KOPT_LINUX_CONFIG_FIXUPS_MMC_BOOT)
 	$(call THINGINO_KOPT_LINUX_CONFIG_FIXUPS_JZ_MAC_CLK)
 	$(call THINGINO_KOPT_LINUX_CONFIG_FIXUPS_AUDIO_DMIC)
+	$(call THINGINO_KOPT_LINUX_CONFIG_FIXUPS_WIREGUARD_UDP_TUNNEL)
 endef
 
+define THINGINO_KOPT_INSTALL_TARGET_CMDS
+	$(THINGINO_KOPT_INSTALL_TARGET_CMDS_IPV6)
+	$(THINGINO_KOPT_INSTALL_TARGET_CMDS_NETFILTER)
+endef
+
+# The SLIP line discipline is attached from userspace; busybox carries the
+# applet only when the kopt asks for it.
+define THINGINO_KOPT_BUSYBOX_CONFIG_FIXUPS
+	$(if $(filter y,$(BR2_PACKAGE_THINGINO_KOPT_SLIP)),$(call KCONFIG_ENABLE_OPT,CONFIG_SLATTACH))
+endef
 
 $(eval $(generic-package))

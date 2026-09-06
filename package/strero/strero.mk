@@ -1,12 +1,21 @@
 STRERO_SITE_METHOD = git
 STRERO_SITE = https://github.com/themactep/strero
 STRERO_SITE_BRANCH = master
-STRERO_VERSION = a91cd5251ce300e7c6cb1106b5c5a9d8ea021350
+STRERO_VERSION = ca1e10e03b17dfa0899116f975006edfdd2f7b5c
 
 STRERO_GIT_SUBMODULES = YES
 
 STRERO_DEPENDENCIES = thingino-jct ingenic-lib libschrift
 STRERO_DEPENDENCIES += opus
+ifeq ($(BR2_PACKAGE_OPENIMP),y)
+STRERO_DEPENDENCIES += openimp
+endif
+ifeq ($(BR2_PACKAGE_INGENIC_SYSTEM_LIBS_NEO),y)
+STRERO_DEPENDENCIES += ingenic-system-libs-neo
+endif
+ifeq ($(BR2_PACKAGE_LIBAUDIOPROCESS_NEO),y)
+STRERO_DEPENDENCIES += libaudioprocess-neo
+endif
 
 STRERO_CFLAGS += \
 	-Os -DHAVE_LIBSCHRIFT=1 \
@@ -182,6 +191,7 @@ define STRERO_BUILD_CMDS
 		$(if $(BR2_PACKAGE_STRERO_TLS_OPENSSL),RTMPS_BACKEND_OPENSSL=1,) \
 		$(if $(BR2_PACKAGE_STRERO_TLS_MBEDTLS),RTMPS_BACKEND_MBEDTLS=1,) \
 		$(if $(BR2_PACKAGE_STRERO_WEBRTC),WEBRTC_ENABLED=1,) \
+		DEBUG_STRIP=0 \
 		-C $(@D) all commit_tag=$(shell git show -s --format=%h)
 endef
 
@@ -189,6 +199,9 @@ define STRERO_INSTALL_TARGET_CMDS
 	# Install the streamer binary
 	$(INSTALL) -D -m 0755 $(@D)/bin/streamer \
 		$(TARGET_DIR)/usr/bin/streamer
+
+	# Copy to NFS share for dev iteration (camera mounts /mnt/nfs)
+	[ -d /nfs ] && cp $(TARGET_DIR)/usr/bin/streamer /nfs/streamer || true
 
 	# Install the JSON configuration file
 	$(INSTALL) -D -m 0644 $(@D)/res/streamer.json \

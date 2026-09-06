@@ -4,19 +4,42 @@ WYZE_ACCESSORY_SITE = $(WYZE_ACCESSORY_PKGDIR)/files
 
 define WYZE_ACCESSORY_INSTALL_TARGET_CMDS_DOORBELL_CTRL
 	$(TARGET_CC) $(TARGET_CFLAGS) -o $(TARGET_DIR)/usr/sbin/doorbell_ctrl $(WYZE_ACCESSORY_PKGDIR)/files/doorbell_chime.c $(TARGET_LDFLAGS)
+	$(INSTALL) -D -m 0755 $(WYZE_ACCESSORY_PKGDIR)/files/doorbell_event \
+		$(TARGET_DIR)/usr/sbin/doorbell_event
+	$(INSTALL) -D -m 0755 $(WYZE_ACCESSORY_PKGDIR)/files/doorbell_alarm \
+		$(TARGET_DIR)/usr/sbin/doorbell_alarm
+	$(INSTALL) -D -m 0755 $(WYZE_ACCESSORY_PKGDIR)/files/S14doorbell-alarm \
+		$(TARGET_DIR)/etc/init.d/S14doorbell-alarm
+	$(INSTALL) -d $(TARGET_DIR)/var/www/a
+	$(INSTALL) -d $(TARGET_DIR)/var/www/x
+	$(INSTALL) -d $(TARGET_DIR)/var/www/a/plugins
+	$(INSTALL) -D -m 0644 $(WYZE_ACCESSORY_PKGDIR)/files/www/config-doorbell.html \
+		$(TARGET_DIR)/var/www/config-doorbell.html
+	$(INSTALL) -D -m 0644 $(WYZE_ACCESSORY_PKGDIR)/files/www/a/config-doorbell.js \
+		$(TARGET_DIR)/var/www/a/config-doorbell.js
+	$(INSTALL) -D -m 0644 $(WYZE_ACCESSORY_PKGDIR)/files/www/a/doorbell-banner.js \
+		$(TARGET_DIR)/var/www/a/doorbell-banner.js
+	$(INSTALL) -D -m 0755 $(WYZE_ACCESSORY_PKGDIR)/files/www/x/json-config-doorbell.cgi \
+		$(TARGET_DIR)/var/www/x/json-config-doorbell.cgi
+	$(INSTALL) -D -m 0755 $(WYZE_ACCESSORY_PKGDIR)/files/www/x/json-chime-status.cgi \
+		$(TARGET_DIR)/var/www/x/json-chime-status.cgi
+	$(INSTALL) -D -m 0644 $(WYZE_ACCESSORY_PKGDIR)/files/doorbell.webui.json \
+		$(TARGET_DIR)/var/www/a/plugins/doorbell.webui.json
 endef
 
 define WYZE_ACCESSORY_INSTALL_DOORBELL_BUTTON_CONF
 	$(INSTALL) -m 0755 -d $(TARGET_DIR)/etc
-	echo -e "KEY_1 RELEASE 0 doorbell_ctrl $(BR2_PACKAGE_WYZE_ACCESSORY_DOORBELL_CTRL_MAC) 15 1\nKEY_1 TIMED 0.1 play /usr/share/sounds/th-doorbell_3.opus" \
+	echo -e "KEY_1 RELEASE 0 doorbell_event button_press\nKEY_1 TIMED 0.1 play /usr/share/sounds/doorbell_3.opus" \
 		>> $(TARGET_DIR)/etc/thingino-button.conf
-	#echo -e "61 high doorbell chime" >> $(TARGET_DIR)/etc/gpio.conf
 endef
 
 define WYZE_ACCESSORY_INSTALL_TARGET_CMDS_FLOODLIGHT
+	$(INSTALL) -D -m 0755 $(WYZE_ACCESSORY_PKGDIR)/files/floodlight_ctl \
+		$(TARGET_DIR)/usr/sbin/floodlight_ctl
+
 	$(INSTALL) -m 0755 -d $(TARGET_DIR)/etc/modules.d
-	echo ch341 >> $(TARGET_DIR)/etc/modules.d/accessory
-	echo snd-usb-audio >> $(TARGET_DIR)/etc/modules.d/accessory
+	echo ch341 >> $(TARGET_DIR)/etc/modules.d/50-accessory
+	echo snd-usb-audio >> $(TARGET_DIR)/etc/modules.d/50-accessory
 endef
 
 define WYZE_ACCESSORY_INSTALL_TARGET_CMDS_SPOTLIGHT
@@ -24,7 +47,7 @@ define WYZE_ACCESSORY_INSTALL_TARGET_CMDS_SPOTLIGHT
 		$(TARGET_DIR)/usr/sbin/spotlight_ctl
 
 	$(INSTALL) -m 0755 -d $(TARGET_DIR)/etc/modules.d
-	echo ch341 >> $(TARGET_DIR)/etc/modules.d/accessory
+	echo ch341 >> $(TARGET_DIR)/etc/modules.d/50-accessory
 endef
 
 define WYZE_ACCESSORY_INSTALL_TARGET_CMDS_CAR
@@ -32,7 +55,7 @@ define WYZE_ACCESSORY_INSTALL_TARGET_CMDS_CAR
 		$(TARGET_DIR)/usr/sbin/car_control
 
 	$(INSTALL) -m 0755 -d $(TARGET_DIR)/etc/modules.d
-	echo cp210x >> $(TARGET_DIR)/etc/modules.d/accessory
+	echo cp210x >> $(TARGET_DIR)/etc/modules.d/50-accessory
 endef
 
 define WYZE_ACCESSORY_LINUX_CONFIG_FIXUPS_FLOODLIGHT
@@ -54,35 +77,30 @@ define WYZE_ACCESSORY_LINUX_CONFIG_FIXUPS_CAR
 	$(call KCONFIG_SET_OPT,CONFIG_USB_SERIAL_CP210X,m)
 endef
 
+# GNU make's += would join the last line of one variant block onto the
+# first line of the next, corrupting the recipe (see 9657a0417 vs 4b7d80524).
+# $(sep) is a newline; append it to every block so each ends its own line.
 ifeq ($(BR2_PACKAGE_WYZE_ACCESSORY_FLOODLIGHT),y)
-	WYZE_ACCESSORY_INSTALL_TARGET_CMDS += $(WYZE_ACCESSORY_INSTALL_TARGET_CMDS_FLOODLIGHT)
+	WYZE_ACCESSORY_INSTALL_TARGET_CMDS += $(WYZE_ACCESSORY_INSTALL_TARGET_CMDS_FLOODLIGHT)$(sep)
 	WYZE_ACCESSORY_LINUX_CONFIG_FIXUPS += $(WYZE_ACCESSORY_LINUX_CONFIG_FIXUPS_FLOODLIGHT)
 endif
 
 ifeq ($(BR2_PACKAGE_WYZE_ACCESSORY_SPOTLIGHT),y)
-	WYZE_ACCESSORY_INSTALL_TARGET_CMDS += $(WYZE_ACCESSORY_INSTALL_TARGET_CMDS_SPOTLIGHT)
+	WYZE_ACCESSORY_INSTALL_TARGET_CMDS += $(WYZE_ACCESSORY_INSTALL_TARGET_CMDS_SPOTLIGHT)$(sep)
 	WYZE_ACCESSORY_LINUX_CONFIG_FIXUPS += $(WYZE_ACCESSORY_LINUX_CONFIG_FIXUPS_SPOTLIGHT)
 endif
 
 ifeq ($(BR2_PACKAGE_WYZE_ACCESSORY_CAR),y)
-	WYZE_ACCESSORY_INSTALL_TARGET_CMDS += $(WYZE_ACCESSORY_INSTALL_TARGET_CMDS_CAR)
+	WYZE_ACCESSORY_INSTALL_TARGET_CMDS += $(WYZE_ACCESSORY_INSTALL_TARGET_CMDS_CAR)$(sep)
 	WYZE_ACCESSORY_LINUX_CONFIG_FIXUPS += $(WYZE_ACCESSORY_LINUX_CONFIG_FIXUPS_CAR)
 endif
 
 ifeq ($(BR2_PACKAGE_WYZE_ACCESSORY_DOORBELL_CTRL),y)
-	WYZE_ACCESSORY_INSTALL_TARGET_CMDS += $(WYZE_ACCESSORY_INSTALL_TARGET_CMDS_DOORBELL_CTRL)
+	WYZE_ACCESSORY_INSTALL_TARGET_CMDS += $(WYZE_ACCESSORY_INSTALL_TARGET_CMDS_DOORBELL_CTRL)$(sep)
 	WYZE_ACCESSORY_TARGET_FINALIZE_HOOKS += WYZE_ACCESSORY_INSTALL_DOORBELL_BUTTON_CONF
+ifeq ($(BR2_PACKAGE_THINGINO_WEBUI),y)
+	WYZE_ACCESSORY_DEPENDENCIES += thingino-webui
+endif
 endif
 
-define WYZE_ACCESSORY_INSTALL_CMDS
-	$(WYZE_ACCESSORY_INSTALL_TARGET_CMDS)
-endef
-
 $(eval $(generic-package))
-
-define WYZE_ACCESSORY_INSTALL_TARGET_CMDS
-	$(call WYZE_ACCESSORY_INSTALL_TARGET_CMDS_FLOODLIGHT)
-	$(call WYZE_ACCESSORY_INSTALL_TARGET_CMDS_SPOTLIGHT)
-	$(call WYZE_ACCESSORY_INSTALL_TARGET_CMDS_CAR)
-	$(call WYZE_ACCESSORY_INSTALL_TARGET_CMDS_DOORBELL_CTRL)
-endef

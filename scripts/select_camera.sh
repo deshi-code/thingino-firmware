@@ -1,17 +1,22 @@
 #!/bin/bash
+# shellcheck disable=SC2001,SC2162
 #
 # Camera selection script for Thingino firmware
 # Supports fzf, whiptail, dialog, and numbered list fallback
 #
-# Usage: select_camera.sh <cameras_dir> <memo_file> [prompt_for_ip]
+# Usage: select_camera.sh <cameras_dir> <memo_file> [prompt_for_ip] [suggested_camera]
 #
+# suggested_camera: optional camera name to offer first (e.g., auto-detected from device)
 # Returns: Camera directory name (not full path)
 #
+
+set -euo pipefail
 
 cameras_dir="$1"
 memo_file="$2"
 ip_memo_file="${memo_file}.ip"
 prompt_for_ip="${3:-1}"
+suggested_camera="${4:-}"
 
 if [ -z "$cameras_dir" ] || [ -z "$memo_file" ]; then
 	echo "ERROR: Usage: $0 <cameras_dir> <memo_file> [prompt_for_ip]" >&2
@@ -23,8 +28,11 @@ if [ ! -d "$cameras_dir" ]; then
 	exit 1
 fi
 
-# Get list of cameras (list subdirectories in cameras_dir)
-cameras=($(ls "$cameras_dir" | sort))
+# Get list of cameras (list subdirectories in cameras_dir, sorted)
+cameras=()
+while IFS= read -r name; do
+	cameras+=("$name")
+done < <(find "$cameras_dir" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
 
 if [ ${#cameras[@]} -eq 0 ]; then
 	echo "ERROR: No camera configs found in $cameras_dir" >&2
@@ -32,6 +40,17 @@ if [ ${#cameras[@]} -eq 0 ]; then
 fi
 
 selected_camera=""
+
+# If a suggested camera was provided (e.g., from SSH auto-detection), offer it first.
+if [ -n "$suggested_camera" ] && [ -d "$cameras_dir/$suggested_camera" ]; then
+	echo "" >&2
+	echo "Detected from device: $suggested_camera" >&2
+	read -r -n 1 -s -p "Use this camera? [Y/n]: " use_suggested >&2
+	echo "" >&2
+	if [ -z "$use_suggested" ] || [ "$use_suggested" = "y" ] || [ "$use_suggested" = "Y" ]; then
+		selected_camera="$suggested_camera"
+	fi
+fi
 
 prompt_ip_address() {
 	local current_ip new_ip
@@ -63,8 +82,8 @@ prompt_ip_address() {
 	printf '%s\n' "$new_ip" > "$ip_memo_file"
 }
 
-# Check if there's a previous selection
-if [ -f "$memo_file" ]; then
+# Check if there's a previous selection (only if no suggestion was accepted)
+if [ -z "$selected_camera" ] && [ -f "$memo_file" ]; then
 	prev_camera=$(cat "$memo_file")
 	if [ -n "$prev_camera" ] && [ -d "$cameras_dir/$prev_camera" ]; then
 		echo "" >&2

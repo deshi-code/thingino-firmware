@@ -1,7 +1,8 @@
 #!/bin/sh
+# shellcheck disable=SC2068,SC2086,SC2154,SC3043
 
 DAEMON="/usr/bin/motors-daemon"
-DAEMON_ARGS="-d -p"
+DAEMON_ARGS="-p"
 PIDFILE="/run/motors-daemon.pid"
 
 ensure_command() {
@@ -26,7 +27,7 @@ stop_daemon() {
 	start-stop-daemon -K -x "$DAEMON"
 }
 
-MOTORS_CONFIG="/etc/motors.json"
+MOTORS_CONFIG="/etc/thingino.json"
 
 ensure_command "motors"
 
@@ -56,14 +57,20 @@ set_motors_speed() {
 position_motors() {
 	local x y
 
-	pos_0=$(jct $MOTORS_CONFIG get motors.pos_0)
+	# Initial point is the first preset (motors.presets[0]); fall back to
+	# the legacy pos_0 key on configs that predate the presets array.
+	x=$(jct $MOTORS_CONFIG get motors.presets.0.x 2>/dev/null)
+	y=$(jct $MOTORS_CONFIG get motors.presets.0.y 2>/dev/null)
 
-	if [ -n "$pos_0" ]; then
-		x=$(echo $pos_0 | cut -d, -f1)
-		y=$(echo $pos_0 | cut -d, -f2)
-	else
-		x=$((steps_pan / 2))
-		y=$((steps_tilt / 2))
+	if [ -z "$x" ] || [ -z "$y" ]; then
+		pos_0=$(jct $MOTORS_CONFIG get motors.pos_0 2>/dev/null)
+		if [ -n "$pos_0" ]; then
+			x=$(echo $pos_0 | cut -d, -f1)
+			y=$(echo $pos_0 | cut -d, -f2)
+		else
+			x=$((steps_pan / 2))
+			y=$((steps_tilt / 2))
+		fi
 	fi
 
 	echo "Move to $x,$y"
@@ -102,12 +109,18 @@ start() {
 		modprobe_args="hmaxstep=$steps_pan vmaxstep=$steps_tilt"
 
 		if [ "true" = "$is_spi" ]; then
-			if [ -n "$invert_x" ]; then
-				modprobe_args="$modprobe_args invert_x=$invert_x"
+			# invert_x/invert_y are real module params only on the SPI driver.
+			# Kernel module expects integers (0/1), not booleans (true/false).
+			if [ "true" = "$invert_x" ]; then
+				modprobe_args="$modprobe_args invert_x=1"
+			elif [ -n "$invert_x" ]; then
+				modprobe_args="$modprobe_args invert_x=0"
 			fi
 
-			if [ -n "$invert_y" ]; then
-				modprobe_args="$modprobe_args invert_y=$invert_y"
+			if [ "true" = "$invert_y" ]; then
+				modprobe_args="$modprobe_args invert_y=1"
+			elif [ -n "$invert_y" ]; then
+				modprobe_args="$modprobe_args invert_y=0"
 			fi
 		else
 			modprobe_args="$modprobe_args tcu_channels=2"
@@ -166,6 +179,16 @@ stop() {
 	fi
 }
 
+reload() {
+	echo -c 15 "Reloading motors config"
+
+	# Re-reads userspace settings without cycling the kernel module, which has oopsed live kernels on restart.
+	if ! motors -R; then
+		echo "Reload failed; is motors-daemon running?" >&2
+		exit 1
+	fi
+}
+
 case "$1" in
 	start)
 		start
@@ -178,8 +201,11 @@ case "$1" in
 		sleep 1
 		start
 		;;
+	reload)
+		reload
+		;;
 	*)
-		echo "Usage: $0 {start|stop|restart}"
+		echo "Usage: $0 {start|stop|restart|reload}"
 		exit 1
 		;;
 esac

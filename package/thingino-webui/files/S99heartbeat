@@ -1,4 +1,5 @@
 #!/bin/sh
+# shellcheck disable=SC2046,SC2086,SC3043
 
 # Heartbeat daemon - runs in background and updates cache continuously
 # Start with: /etc/init.d/S99heartbeat start
@@ -127,7 +128,7 @@ heartbeat_loop() {
 {
   "image": {"running_mode": null},
   "audio": {"mic_enabled": null, "spk_enabled": null},
-  "daynight": {"status": null, "enabled": null}
+  "daynight": {"enabled": null}
 }
 EOF
 		)
@@ -148,9 +149,9 @@ EOF
 
 		printf '{"time_now":%s,"daynight_brightness":"%s","total_gain":%s,"daynight_mode":"%s","rec_ch0":%s,"rec_ch1":%s,"motion_enabled":%s,"privacy_enabled":%s,"color_mode":%s,"mic_enabled":%s,"spk_enabled":%s,"daynight_enabled":%s}' \
 			"$(date +%s)" \
-			"$(read_first_field /run/prudynt/daynight_brightness "unknown")" \
+			"$(read_first_field /run/thingino/daynight_brightness "unknown")" \
 			"$total_gain" \
-			"$(read_first_field /run/prudynt/daynight_mode "unknown")" \
+			"$(read_first_field /run/thingino/daynight_mode "unknown")" \
 			"$ch0_rec" \
 			"$ch1_rec" \
 			"$motion_enabled" \

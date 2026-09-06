@@ -13,9 +13,7 @@
       "pin": 48,
       "active_low": true
     },
-    "wlan": {
-      "pin": 57,
-      "active_low": false
-    }
+    "speaker": 63,
+    "wlan": 57
   }
 }

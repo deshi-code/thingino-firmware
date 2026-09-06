@@ -1,4 +1,10 @@
-#!/bin/sh
+#!/bin/bash
+# shellcheck disable=SC2086
+# shellcheck disable=SC2034,SC2162,SC2181
+
+set -eu
+# NOTE: no pipefail — the dd version check pipeline (line 36-54) uses
+# explicit $? inspection; pipefail would short-circuit that pattern.
 
 if [ -f .prereqs.done ]; then
 	exit 0
@@ -121,58 +127,63 @@ check_glibc_version
 
 if [ -f /etc/os-release ]; then
 	. /etc/os-release
-	OS="$NAME"
+	OS="${NAME:-}"
 
-	# Check ID_LIKE for Debian-based identification first
-	case "$ID_LIKE" in
+	# Common packages across all distros
+	default_packages="autoconf bc bison cpio cmake curl dialog file flex gawk git m4 make mtools nano parted patch perl rsync swig unzip wget ripgrep shfmt nodejs npm"
+
+	# Check ID_LIKE for Debian-based identification first. Debian proper sets
+	# no ID_LIKE, and os-release guarantees none of these keys, so every one
+	# of them is defaulted: under set -u a bare expansion aborts the check.
+	case "${ID_LIKE:-}" in
 		*debian*)
 			echo "Detected as Debian-based via ID_LIKE"
 			pkg_manager="dpkg"
 			pkg_check_command="dpkg-query -W -f='\${Status}'"
 			pkg_install_cmd="apt-get install -y"
 			pkg_update_cmd="apt-get update"
-			packages="autoconf build-essential bc bison ccache cpio cmake curl dialog file flex gawk git libcrypt-dev libncurses-dev libusb-1.0-0-dev make mtools m4 nano parted perl python3 python3-jsonschema rsync unzip u-boot-tools vim-tiny wget whiptail ripgrep shfmt nodejs npm"
+			packages="$default_packages build-essential ccache libcrypt-dev libgmp-dev libncurses-dev libusb-1.0-0-dev u-boot-tools vim-tiny whiptail python3 python3-jsonschema python3-gmpy2"
 			;;
 		*)
-			case "$ID" in
+			case "${ID:-}" in
 				ubuntu | debian | linuxmint | zorin)
 					echo "Detected as Debian-based via ID"
 					pkg_manager="dpkg"
 					pkg_check_command="dpkg-query -W -f='\${Status}'"
 					pkg_install_cmd="apt-get install -y"
 					pkg_update_cmd="apt-get update"
-					packages="autoconf build-essential bc bison cpio cmake curl dialog file flex gawk git libcrypt-dev libncurses-dev libusb-1.0-0-dev m4 make mtools nano parted perl rsync unzip u-boot-tools vim-tiny wget whiptail ripgrep shfmt nodejs npm"
+					packages="$default_packages build-essential ccache libcrypt-dev libgmp-dev libncurses-dev libusb-1.0-0-dev u-boot-tools vim-tiny whiptail python3 python3-gmpy2"
 					;;
 				rhel | centos | fedora)
 					echo "RedHat-based"
 					pkg_manager="rpm"
 					pkg_check_command="rpm -q --whatprovides"
 					pkg_install_cmd="dnf install -y"
-					packages="autoconf gcc m4 make bc bison cpio cmake curl dialog file flex gawk git libxcrypt-devel nano parted ncurses-devel newt libusbx-devel perl rsync unzip uboot-tools wget ripgrep shfmt nodejs npm"
+					packages="$default_packages gcc gmp-devel libxcrypt-devel ncurses-devel newt libusbx-devel python3 python3-gmpy2 uboot-tools"
 					;;
 				arch)
 					echo "Arch-based"
 					pkg_manager="pacman"
 					pkg_check_command="pacman -Q"
 					pkg_install_cmd="pacman -S --noconfirm"
-					packages="autoconf base-devel bc bison cpio cmake curl dialog file flex gawk git libxcrypt m4 libnewt libusb make mtools nano parted ncurses perl rsync unzip uboot-tools wget ripgrep shfmt nodejs npm"
+					packages="$default_packages base-devel libxcrypt libnewt ncurses python python-gmpy2 uboot-tools"
 					;;
 				alpine)
 					echo "Alpine Linux"
 					pkg_manager="apk"
 					pkg_check_command="apk info -e"
 					pkg_install_cmd="apk add"
-					packages="autoconf bash build-base bc bison cpio cmake curl dialog file findutils flex gawk git grep m4 mtools nano ncurses-dev newt parted libusb-dev make perl rsync unzip uboot-tools wget ripgrep shfmt nodejs npm"
+					packages="$default_packages bash build-base findutils gmp-dev grep libusb-dev ncurses-dev newt py3-gmpy2 python3 uboot-tools"
 					;;
 				opensuse*)
 					echo "OpenSUSE Tumbleweed"
 					pkg_manager="zypper"
 					pkg_check_command="zypper search -i"
 					pkg_install_cmd="zypper install -y"
-					packages="autoconf bc bison cpio cmake curl dialog file findutils flex gawk gcc git grep libxcrypt-devel m4 make mtools ncurses-devel newt parted libusb-1_0-devel perl rsync unzip u-boot-tools wget ripgrep shfmt nodejs npm"
+					packages="$default_packages gcc findutils gmp-devel grep libxcrypt-devel ncurses-devel newt libusb-1_0-devel python3 python3-gmpy2 u-boot-tools"
 					;;
 				*)
-					echo "Unsupported OS: $ID"
+					echo "Unsupported OS: ${ID:-unknown}"
 					exit 1
 					;;
 			esac
@@ -253,7 +264,7 @@ if [ -n "$packages_to_install" ]; then
 			echo "Please run it with sudo or as root."
 			exit 1
 		fi
-		if [ "$ID" = "ubuntu" ] || [ "$ID" = "debian" ]; then
+		if [ "${ID:-}" = "ubuntu" ] || [ "${ID:-}" = "debian" ]; then
 			echo "Updating package list..."
 			$install_cmd $pkg_update_cmd
 		fi

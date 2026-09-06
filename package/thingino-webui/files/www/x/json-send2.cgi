@@ -1,6 +1,8 @@
 #!/bin/sh
+# shellcheck disable=SC3043  # busybox ash supports local; POSIX does not define it
 
 # Check authentication
+# shellcheck disable=SC1091  # auth.sh is installed on the camera, not in the build tree
 . /var/www/x/auth.sh
 require_auth
 
@@ -23,6 +25,11 @@ default_domain_config() {
 {"url":"","token":"","title":"Thingino Camera","message":"Motion detected at %Y-%m-%d %H:%M:%S","extras":"","priority":5,"send_photo":false,"send_video":false}
 EOF
 			;;
+		pushover)
+			cat <<'EOF'
+{"token":"","user":"","title":"Thingino Camera","message":"Motion detected at %Y-%m-%d %H:%M:%S","priority":0,"send_photo":false,"send_video":false}
+EOF
+			;;
 		*)
 			echo '{}'
 			;;
@@ -31,11 +38,18 @@ EOF
 
 # GET - Load configuration
 if [ "$REQUEST_METHOD" = "GET" ]; then
-	# Read motion config from prudynt
-	if [ -f "$prudynt_config" ]; then
-		motion_data=$(jct "$prudynt_config" get motion 2>/dev/null || echo '{}')
-	else
-		motion_data='{}'
+	# Prefer agent motion enable; fall back to prudynt.json
+	motion_data=
+	if command -v agentctl >/dev/null 2>&1; then
+		enabled=$(agentctl get-setting motion/enabled 2>/dev/null | sed -n 's/.*"enabled"[[:space:]]*:[[:space:]]*\(true\|false\).*/\1/p' | head -n 1)
+		[ -n "$enabled" ] && motion_data="{\"enabled\":$enabled}"
+	fi
+	if [ -z "$motion_data" ]; then
+		if [ -f "$prudynt_config" ]; then
+			motion_data=$(jct "$prudynt_config" get motion 2>/dev/null || echo '{}')
+		else
+			motion_data='{}'
+		fi
 	fi
 
 	# Helper to safely get config values
@@ -62,11 +76,13 @@ if [ "$REQUEST_METHOD" = "GET" ]; then
   "ftp": $(get_domain_config ftp),
   "telegram": $(get_domain_config telegram),
   "gotify": $(get_domain_config gotify),
+  "pushover": $(get_domain_config pushover),
   "mqtt": $(get_domain_config mqtt),
   "webhook": $(get_domain_config webhook),
   "storage": $(get_domain_config storage),
   "ntfy": $(get_domain_config ntfy),
-  "gphotos": $(get_domain_config gphotos)
+  "gphotos": $(get_domain_config gphotos),
+  "speaker": $(get_domain_config speaker)
 }
 EOF
 	exit 0
@@ -90,18 +106,67 @@ if [ "$REQUEST_METHOD" = "POST" ]; then
 	temp_json=$(mktemp)
 	echo "$post_data" >"$temp_json"
 
-	# Detect which domain is being updated by checking keys
+	# Helper: extract a single top-level key to its own temp file and
+	# import that file into the target config.  Keeps domains isolated
+	# so a combined payload (e.g. motion+speaker) works correctly.
+	import_domain() {
+		local domain="$1"
+		local target="$2"
+		local val
+		val=$(jct "$temp_json" get "$domain" 2>/dev/null) || return 1
+		local domain_temp
+		domain_temp=$(mktemp)
+		printf '{"%s": %s}\n' "$domain" "$val" >"$domain_temp"
+		jct "$target" import "$domain_temp"
+		rm -f "$domain_temp"
+	}
+
+	saved=0
+
+	# Motion config — prefer agent when available, else prudynt.json
 	if jct "$temp_json" get motion >/dev/null 2>&1; then
-		# Motion config - import into prudynt.json
-		jct "$prudynt_config" import "$temp_json"
-		sync
-
-		# Update running prudynt instance if it's running
-		if pidof prudynt >/dev/null 2>&1; then
-			prudyntctl json - <"$temp_json" >/dev/null 2>&1
+		if command -v agentctl >/dev/null 2>&1; then
+			enabled=$(jct "$temp_json" get motion.enabled 2>/dev/null | tr -d '"')
+			case "$enabled" in
+				true | false)
+					tmp=$(mktemp /tmp/send2-motion.XXXXXX) || true
+					if [ -n "$tmp" ]; then
+						printf '{"enabled":%s}\n' "$enabled" >"$tmp"
+						agentctl set-setting motion/enabled "$tmp" >/dev/null 2>&1 || true
+						rm -f "$tmp"
+					fi
+					;;
+			esac
 		fi
+		motion_temp=$(mktemp)
+		motion_val=$(jct "$temp_json" get motion)
+		printf '{"motion": %s}\n' "$motion_val" >"$motion_temp"
+		if [ -f "$prudynt_config" ]; then
+			jct "$prudynt_config" import "$motion_temp"
+			sync
+			if pidof prudynt >/dev/null 2>&1; then
+				prudyntctl json - <"$motion_temp" >/dev/null 2>&1
+			fi
+		fi
+		rm -f "$motion_temp"
+		saved=1
+	fi
 
-	elif jct "$temp_json" get email >/dev/null 2>&1; then
+	# Speaker config - import into send2.json (separate if so it can be
+	# combined with motion in a single request)
+	if jct "$temp_json" get speaker >/dev/null 2>&1; then
+		import_domain speaker "$config_file"
+		saved=1
+	fi
+
+	if [ "$saved" -eq 1 ]; then
+		rm -f "$temp_json"
+		send_json_response '{"result":"success","message":"Settings saved"}'
+		exit 0
+	fi
+
+	# Other domains (still mutually exclusive via elif)
+	if jct "$temp_json" get email >/dev/null 2>&1; then
 		jct "$config_file" import "$temp_json"
 
 	elif jct "$temp_json" get ftp >/dev/null 2>&1; then
@@ -111,6 +176,9 @@ if [ "$REQUEST_METHOD" = "POST" ]; then
 		jct "$config_file" import "$temp_json"
 
 	elif jct "$temp_json" get gotify >/dev/null 2>&1; then
+		jct "$config_file" import "$temp_json"
+
+	elif jct "$temp_json" get pushover >/dev/null 2>&1; then
 		jct "$config_file" import "$temp_json"
 
 	elif jct "$temp_json" get mqtt >/dev/null 2>&1; then

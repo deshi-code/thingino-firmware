@@ -12,13 +12,8 @@
       "pin": 48,
       "active_low": true
     },
-    "usb_en": {
-      "pin": 47,
-      "active_low": false
-    },
-    "wlan": {
-      "pin": 62,
-      "active_low": false
-    }
+    "speaker": 63,
+    "usb_en": 47,
+    "wlan": 62
   }
 }

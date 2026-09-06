@@ -7,6 +7,29 @@
     "mmc_power": {
       "pin": 39,
       "active_low": true
-    }
+    },
+    "speaker": 8
+  },
+  "motors": {
+    "gpio_invert": false,
+    "gpio_pan": "54 51 49 57",
+    "gpio_switch": -1,
+    "gpio_tilt": "63 62 61 60",
+    "homing": true,
+    "invert_x": false,
+    "invert_y": false,
+    "is_spi": false,
+    "presets": [
+      {
+        "id": 0,
+        "x": 1065,
+        "y": 800,
+        "description": "Home"
+      }
+    ],
+    "speed_pan": 900,
+    "speed_tilt": 900,
+    "steps_pan": 2130,
+    "steps_tilt": 1600
   }
 }

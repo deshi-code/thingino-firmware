@@ -4,7 +4,7 @@
 #
 ################################################################################
 
-THINGINO_UBUS_VERSION = 3cc98db1a422dcf560f2d6347fd410f17565a89d
+THINGINO_UBUS_VERSION = 24864e7840b3a02a9ef76284a373f6b2f00b8a9b
 THINGINO_UBUS_SITE = https://git.openwrt.org/project/ubus.git
 THINGINO_UBUS_SITE_METHOD = git
 

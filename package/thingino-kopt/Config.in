@@ -22,6 +22,7 @@ config BR2_PACKAGE_THINGINO_KOPT_CIFS
 config BR2_PACKAGE_THINGINO_KOPT_LEDS
 	bool "GPIO LEDs"
 	depends on BR2_PACKAGE_THINGINO_KOPT
+	default y
 	help
 	  Enable the kernel LED subsystem and gpio-leds platform driver.
 
@@ -40,11 +41,6 @@ config BR2_THINGINO_LED_B_ACTIVE_LOW
 	help
 	  Invert the blue LED output logic.
 
-config BR2_THINGINO_LED_B_ACTIVE_ON_BOOT
-	bool "Blue LED on at boot"
-	help
-	  Set the blue LED default state to on.
-
 config BR2_THINGINO_LED_G_GPIO
 	int "Green LED GPIO"
 	default -1
@@ -55,11 +51,6 @@ config BR2_THINGINO_LED_G_ACTIVE_LOW
 	bool "Green LED active low"
 	help
 	  Invert the green LED output logic.
-
-config BR2_THINGINO_LED_G_ACTIVE_ON_BOOT
-	bool "Green LED on at boot"
-	help
-	  Set the green LED default state to on.
 
 config BR2_THINGINO_LED_R_GPIO
 	int "Red LED GPIO"
@@ -72,11 +63,6 @@ config BR2_THINGINO_LED_R_ACTIVE_LOW
 	help
 	  Invert the red LED output logic.
 
-config BR2_THINGINO_LED_R_ACTIVE_ON_BOOT
-	bool "Red LED on at boot"
-	help
-	  Set the red LED default state to on.
-
 config BR2_THINGINO_LED_W_GPIO
 	int "White LED GPIO"
 	default -1
@@ -87,11 +73,6 @@ config BR2_THINGINO_LED_W_ACTIVE_LOW
 	bool "White LED active low"
 	help
 	  Invert the white LED output logic.
-
-config BR2_THINGINO_LED_W_ACTIVE_ON_BOOT
-	bool "White LED on at boot"
-	help
-	  Set the white LED default state to on.
 
 config BR2_THINGINO_LED_Y_GPIO
 	int "Yellow LED GPIO"
@@ -104,11 +85,6 @@ config BR2_THINGINO_LED_Y_ACTIVE_LOW
 	help
 	  Invert the yellow LED output logic.
 
-config BR2_THINGINO_LED_Y_ACTIVE_ON_BOOT
-	bool "Yellow LED on at boot"
-	help
-	  Set the yellow LED default state to on.
-
 config BR2_THINGINO_LED_V_GPIO
 	int "Violet LED GPIO"
 	default -1
@@ -119,11 +95,6 @@ config BR2_THINGINO_LED_V_ACTIVE_LOW
 	bool "Violet LED active low"
 	help
 	  Invert the violet LED output logic.
-
-config BR2_THINGINO_LED_V_ACTIVE_ON_BOOT
-	bool "Violet LED on at boot"
-	help
-	  Set the violet LED default state to on.
 
 endmenu
 
@@ -294,6 +265,13 @@ config BR2_PACKAGE_THINGINO_KOPT_NETFILTER
 	help
 	  Build necessary kernel modules and dependencies to enable netfilter/iptables support.
 
+config BR2_PACKAGE_THINGINO_KOPT_IPV6
+	bool "IPv6"
+	depends on BR2_PACKAGE_THINGINO_KOPT
+	select BR2_PACKAGE_THINGINO_ODHCP6C
+	help
+	  Enable IPv6 networking support.
+
 config BR2_PACKAGE_THINGINO_KOPT_PWM
 	bool "PWM"
 	depends on BR2_PACKAGE_THINGINO_KOPT
@@ -329,6 +307,15 @@ config BR2_PACKAGE_THINGINO_KOPT_UART_UART2
 	depends on BR2_PACKAGE_THINGINO_KOPT_UART
 	help
 	  Enables UART2 on the SoC
+
+config BR2_PACKAGE_THINGINO_KOPT_SLIP
+	bool "SLIP over a serial port"
+	depends on BR2_PACKAGE_THINGINO_KOPT_UART
+	help
+	  IP over a UART (kernel SLIP line discipline plus busybox slattach).
+	  Lets a host reach the camera over a serial line with no wired MAC,
+	  which is how the QEMU test profiles get host access while booting
+	  exactly like a WiFi-only camera.
 
 config BR2_PACKAGE_THINGINO_KOPT_DWC2
 	bool "USB Support"
@@ -374,11 +361,58 @@ config BR2_PACKAGE_THINGINO_KOPT_I2C_BUS1
 	help
 	  Enables I2C1 on the SoC
 
+if BR2_PACKAGE_THINGINO_KOPT_I2C_BUS1
+
+choice
+	prompt "I2C1 Pin Selection"
+	default BR2_PACKAGE_THINGINO_KOPT_I2C_BUS1_PA16_PA17 if BR2_SOC_FAMILY = "t23"
+	default BR2_PACKAGE_THINGINO_KOPT_I2C_BUS1_PB25_PB26
+
+config BR2_PACKAGE_THINGINO_KOPT_I2C_BUS1_PB25_PB26
+	bool "I2C1 on PB25/PB26"
+	help
+	  Routes I2C1 to GPIO PB25 and PB26.
+
+config BR2_PACKAGE_THINGINO_KOPT_I2C_BUS1_PA16_PA17
+	bool "I2C1 on PA16/PA17"
+	depends on BR2_SOC_FAMILY = "t23"
+	help
+	  Routes I2C1 to GPIO PA16 and PA17. T23 only.
+
+	  PA16/PA17 are shared with MMC1 on port A and with the DVP
+	  sensor bus, so this cannot be combined with either.
+
+endchoice
+
+endif
+
 config BR2_PACKAGE_THINGINO_KOPT_I2C_BUS2
 	bool "I2C2"
 	depends on BR2_PACKAGE_THINGINO_KOPT_I2C
 	help
 	  Enables I2C2 on the SoC
+
+if BR2_PACKAGE_THINGINO_KOPT_I2C_BUS2 && BR2_SOC_FAMILY = "t23"
+
+choice
+	prompt "I2C2 Pin Selection"
+	default BR2_PACKAGE_THINGINO_KOPT_I2C_BUS2_PB20_PB21
+
+config BR2_PACKAGE_THINGINO_KOPT_I2C_BUS2_PB20_PB21
+	bool "I2C2 on PB20/PB21"
+	help
+	  Routes I2C2 to GPIO PB20 and PB21.
+
+config BR2_PACKAGE_THINGINO_KOPT_I2C_BUS2_PB27_PB28
+	bool "I2C2 on PB27/PB28"
+	help
+	  Routes I2C2 to GPIO PB27 and PB28.
+
+	  PB27 is shared with the OTG DRVVBUS pin.
+
+endchoice
+
+endif
 
 config BR2_PACKAGE_THINGINO_KOPT_USB_MASS_STORAGE
 	bool "USB Storage"

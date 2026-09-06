@@ -1,23 +1,26 @@
 {
   "gpio": {
-    "button_reset": 6,
     "chime": 7,
-    "ir940": {
-      "pin": 59,
-      "active_low": false,
-      "pwm_channel": 2
-    },
+    "button_reset": 6,
+    "ir940": 59,
     "ircut": "53 52",
     "mmc_cd": -1,
     "sub1g": 61,
-    "white": {
-      "pin": 60,
-      "active_low": false
-    },
-    "wlan": {
-      "pin": 57,
-      "active_low": false,
-      "pwm_channel": 3
+    "white": 60,
+    "wlan": 57,
+    "speaker": 58
+  },
+  "chime": {
+    "units": {},
+    "groups": {},
+    "events": {
+      "button_press": {
+        "sound": "DOORBELL_1",
+        "volume": "5",
+        "repeat": "2",
+        "day": { "group": "all" },
+        "night": { "group": "nighttime", "volume": "2" }
+      }
     }
   }
 }

@@ -2,9 +2,8 @@
 # nino
 ################################################################################
 
-NINO_VERSION = 5959aa8663e57b0e0c4bebf44136d4ad24144390
-NINO_SITE = https://github.com/evanlin96069/nino
-NINO_SITE_METHOD = git
+NINO_VERSION = 0.1.0
+NINO_SITE = $(call github,evanlin96069,nino,v$(NINO_VERSION))
 
 NINO_LICENSE = BSD-2-Clause
 NINO_LICENSE_FILES = LICENSE

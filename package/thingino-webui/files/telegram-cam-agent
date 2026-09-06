@@ -1,4 +1,5 @@
 #!/bin/sh
+# shellcheck disable=SC2018,SC2019,SC2153
 
 CONFIG_FILE="/etc/thingino.json"
 REPLY_TOPIC_PREFIX="thingino/cam"
@@ -41,6 +42,7 @@ publish_reply() {
 	username=$(jct "$CONFIG_FILE" get mqtt_sub.username 2>/dev/null | tr -d '"')
 	password=$(jct "$CONFIG_FILE" get mqtt_sub.password 2>/dev/null | tr -d '"')
 	use_ssl=$(jct "$CONFIG_FILE" get mqtt_sub.use_ssl 2>/dev/null)
+	tls_skip_verify=$(jct "$CONFIG_FILE" get mqtt_sub.tls_skip_verify 2>/dev/null)
 	[ -n "$host" ] || return 1
 	[ -n "$port" ] || port=1883
 	topic="$REPLY_TOPIC_PREFIX/$cam_id/reply"
@@ -52,7 +54,10 @@ publish_reply() {
 	set -- -h "$host" -p "$port" -t "$topic" -m "$payload"
 	[ -n "$username" ] && set -- "$@" -u "$username"
 	[ -n "$password" ] && set -- "$@" -P "$password"
-	[ "$use_ssl" = "true" ] && set -- "$@" --capath /etc/ssl/certs
+	if [ "$use_ssl" = "true" ]; then
+		set -- "$@" --capath /etc/ssl/certs
+		[ "$tls_skip_verify" = "true" ] && set -- "$@" --insecure
+	fi
 	mosquitto_pub "$@"
 }
 
@@ -165,12 +170,12 @@ case "$COMMAND" in
 		else
 			bootstrap_payload=$(printf '{"agent":{"enabled":true,"tls":true,"listen":"0.0.0.0","port":1998,"token":"%s"}}' "$(json_escape "$ARG0")")
 		fi
-		if printf '%s\n' "$bootstrap_payload" >/etc/thingino-agent-bootstrap.json; then
+		if printf '%s\n' "$bootstrap_payload" >/etc/agent-bootstrap.json; then
 			# Reply before restarting the agent so the MQTT client is still alive
 			# when the reply is published. The restart would otherwise kill the
 			# connection before mosquitto_pub can send the reply.
 			publish_reply "$REQUEST_ID" "$CHAT_ID" "Agent bootstrap installed" "$LOCAL_CAMERA_ID" true >/dev/null 2>&1 || true
-			(/etc/init.d/S95thingino-agent restart >/dev/null 2>&1) &
+			(/etc/init.d/S95agent restart >/dev/null 2>&1) &
 			printf 'Agent bootstrap installed\n'
 			exit 0
 		fi

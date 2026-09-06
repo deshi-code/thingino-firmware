@@ -22,40 +22,68 @@
     return base + "?ts=" + assetTag;
   }
 
+  function applyPluginNav(menu) {
+    const plugins = (uiConfig && uiConfig.plugins) || {};
+    for (const [, plugin] of Object.entries(plugins)) {
+      if (!plugin.nav) continue;
+      for (const contribution of plugin.nav) {
+        const sectionId = contribution.section;
+        if (!sectionId) continue;
+        const section = menu.find(
+          (item) => item.type === "dropdown" && item.id === sectionId,
+        );
+        if (!section || !section.items) continue;
+        const items = section.items;
+        const newItems = contribution.items || [];
+        if (!newItems.length) continue;
+        const position = contribution.position || "append";
+        let idx;
+        if (position === "append") {
+          idx = items.length;
+        } else if (position === "prepend") {
+          idx = 0;
+        } else if (position.startsWith("after:")) {
+          const label = position.slice(6).trim();
+          const found = items.findIndex(function (it) {
+            return it.label === label;
+          });
+          idx = found === -1 ? items.length : found + 1;
+        } else if (position.startsWith("before:")) {
+          const label = position.slice(7).trim();
+          const found = items.findIndex(function (it) {
+            return it.label === label;
+          });
+          idx = found === -1 ? items.length : found;
+        } else if (position.startsWith("index:")) {
+          idx = parseInt(position.slice(6), 10) || 0;
+          idx = Math.max(0, Math.min(idx, items.length));
+        } else {
+          idx = items.length;
+        }
+        items.splice.apply(items, [idx, 0].concat(newItems));
+      }
+    }
+    return menu;
+  }
+
   function buildDefaultMenu() {
-    const hasMotors = uiConfig.device && uiConfig.device.motors === true;
     const flashOperationsEnabled =
       uiConfig.device && uiConfig.device.flashOperations === true;
     const settingsItems = [
       { label: "Admin profile", href: "/config-admin.html" },
-      { label: "GPIO pins", href: "/config-gpio.html" },
     ];
 
-    if (hasMotors) {
-      settingsItems.push({
-        label: "Pan/Tilt motors",
-        href: "/config-motors.html",
-      });
-    }
-
+    settingsItems.push({ label: "Network", href: "/config-network.html" });
     settingsItems.push(
-      { label: "Network", href: "/config-network.html" },
-      { label: "Audio", href: "/config-audio.html" },
-      { label: "Privacy screen", href: "/config-privacy.html" },
-      { label: "Photosensing", href: "/config-photosensing.html" },
-      { label: "Dusk2Dawn", href: "/config-dusk2dawn.html" },
-      { label: "RTSP/ONVIF access", href: "/config-rtsp.html" },
       { label: "Remote logging", href: "/config-syslog.html" },
-      { label: "Telegram Bot", href: "/config-telegrambot.html" },
       { label: "Time", href: "/config-time.html" },
       { label: "Web Interface", href: "/config-webui.html" },
-      { label: "WireGuard VPN", href: "/config-wireguard.html" },
-      { label: "ZeroTier VPN", href: "/config-zerotier.html" },
       { type: "divider" },
       { label: "Reset...", href: "/reset.html" },
     );
 
     const toolsItems = [
+      { label: "Cameras on LAN", href: "/tool-cameras.html" },
       { label: "File manager", href: "/tool-file-manager.html" },
       { label: "Network test", href: "/tool-ping-trace.html" },
       { label: "SD card", href: "/tool-sdcard.html" },
@@ -86,7 +114,6 @@
         items: [
           { label: "File: crontab", href: "/info.html?crontab" },
           { label: "File: onvif.json", href: "/info.html?onvif" },
-          { label: "File: prudynt.json", href: "/info.html?prudynt" },
           { label: "File: thingino.json", href: "/info.html?thingino" },
           { label: "Log: dmesg", href: "/info.html?dmesg" },
           { label: "Log: logcat", href: "/info.html?logcat" },
@@ -117,35 +144,13 @@
         type: "dropdown",
         id: "ddServices",
         label: "Services",
-        items: [
-          { label: "Timelapse Recorder", href: "/tool-timelapse.html" },
-          { label: "Video Recorder", href: "/tool-record.html" },
-          { label: "Home Assistant", href: "/config-ha.html" },
-          { label: "MQTT Subscriptions", href: "/tool-mqtt-sub.html" },
-        ],
+        items: [{ label: "Home Assistant", href: "/config-ha.html" }],
       },
       {
         type: "dropdown",
         id: "ddStreamer",
         label: "Streamer",
-        items: [
-          { label: "Image Quality", href: "/streamer-image.html" },
-          { label: "RTSP Main stream", href: "/streamer-main.html" },
-          { label: "Main stream OSD", href: "/streamer-osd0.html" },
-          { label: "RTSP Substream", href: "/streamer-substream.html" },
-          { label: "Substream OSD", href: "/streamer-osd1.html" },
-          { label: "Sensor IQ File", href: "/streamer-sensor.html" },
-          { type: "divider" },
-          { label: "Streamer config", href: "/info.html?prudynt" },
-          { label: "Streamer log", href: "/info.html?logcat" },
-          {
-            label: "Restart streamer",
-            href: "#",
-            id: "restart-prudynt-nav",
-            className: "text-danger confirm",
-            trackActive: false,
-          },
-        ],
+        items: [],
       },
       { type: "link", label: "Preview", href: "/preview.html" },
       {
@@ -182,8 +187,8 @@
 
   const menuData =
     Array.isArray(globalConfig.items) && globalConfig.items.length
-      ? globalConfig.items
-      : buildDefaultMenu();
+      ? applyPluginNav(globalConfig.items)
+      : applyPluginNav(buildDefaultMenu());
 
   function ready(fn) {
     if (document.readyState === "loading") {
@@ -288,6 +293,7 @@
 
     (section.items || []).forEach((item) => {
       const itemLi = document.createElement("li");
+      if (item.hidden) itemLi.classList.add("d-none");
       if (item.type === "divider") {
         const divider = document.createElement("hr");
         divider.className = item.className || "dropdown-divider";
@@ -307,6 +313,7 @@
   function createLinkItem(item) {
     const li = document.createElement("li");
     li.className = "nav-item";
+    if (item.hidden) li.classList.add("d-none");
     li.appendChild(createAnchor(item, "nav-link"));
     return li;
   }
@@ -406,20 +413,31 @@
     const list = document.createElement("ul");
     list.className = "list-unstyled";
 
-    // Reorder items for offcanvas: Preview link first, then others
-    const reorderedItems = [];
-    const otherItems = [];
+    // Reorder items for offcanvas: Preview first, Information before Help at bottom
+    const previewItems = [];
+    const infoItems = [];
+    const helpItems = [];
+    const middleItems = [];
 
     menuItems.forEach((item) => {
       if (item.type === "link" && item.label === "Preview") {
-        reorderedItems.push(item);
+        previewItems.push(item);
+      } else if (item.id === "ddInfo") {
+        infoItems.push(item);
+      } else if (item.id === "ddHelp") {
+        helpItems.push(item);
       } else {
-        otherItems.push(item);
+        middleItems.push(item);
       }
     });
 
-    // Combine with Preview first
-    const finalItems = [...reorderedItems, ...otherItems];
+    // Combine: Preview first, middle, Information second-to-last, Help last
+    const finalItems = [
+      ...previewItems,
+      ...middleItems,
+      ...infoItems,
+      ...helpItems,
+    ];
 
     finalItems.forEach((item) => {
       if (item.type === "dropdown") {
@@ -579,41 +597,6 @@
     );
   }
 
-  function attachPrudyntHandlers(nav) {
-    const restartPrudyntLink = nav.querySelector("#restart-prudynt-nav");
-    const restartPrudyntOffcanvas = nav.querySelector(
-      "#restart-prudynt-nav-offcanvas",
-    );
-
-    const restartHandler = function (e) {
-      // Let the confirmation system handle the dialog first
-      if (
-        this.classList &&
-        this.classList.contains("confirm") &&
-        this.dataset.confirmBypass !== "1"
-      ) {
-        return; // Let the confirmation system handle this click
-      }
-
-      e.preventDefault();
-      if (
-        window.thinginoFooter &&
-        typeof window.thinginoFooter.restartPrudynt === "function"
-      ) {
-        window.thinginoFooter.restartPrudynt();
-      } else {
-        console.warn("thinginoFooter.restartPrudynt not available yet");
-      }
-    };
-
-    if (restartPrudyntLink) {
-      restartPrudyntLink.addEventListener("click", restartHandler);
-    }
-    if (restartPrudyntOffcanvas) {
-      restartPrudyntOffcanvas.addEventListener("click", restartHandler);
-    }
-  }
-
   function mountNavigation() {
     const nav = buildNav(menuData);
     const placeholder = $("[data-app-nav]");
@@ -626,7 +609,6 @@
       document.body.insertAdjacentElement("afterbegin", nav);
     }
     highlightActive(nav, globalConfig.activePath);
-    attachPrudyntHandlers(nav);
     ensureControlBarScript();
   }
 

@@ -12,7 +12,7 @@ THINGINO_MOSQUITTO_20X_LICENSE_FILES = LICENSE.txt epl-v20 edl-v10
 THINGINO_MOSQUITTO_20X_INSTALL_STAGING = YES
 
 THINGINO_MOSQUITTO_20X_MAKE_DIRS = lib client
-THINGINO_MOSQUITTO_20X_MAKE_OPTS = prefix=/usr WITH_CJSON=no
+THINGINO_MOSQUITTO_20X_MAKE_OPTS = prefix=/usr WITH_CJSON=no WITH_LIB_CPP=no
 
 ifeq ($(BR2_PACKAGE_THINGINO_MOSQUITTO_20X_USE_MBEDTLS),y)
 THINGINO_MOSQUITTO_20X_DEPENDENCIES += mbedtls
@@ -57,6 +57,12 @@ define THINGINO_MOSQUITTO_20X_INSTALL_STAGING_CMDS
 		DIRS="$(THINGINO_MOSQUITTO_20X_MAKE_DIRS)" \
 		$(THINGINO_MOSQUITTO_20X_MAKE_OPTS) \
 		DESTDIR=$(STAGING_DIR) install
+	rm -f \
+		$(STAGING_DIR)/usr/lib/libmosquittopp.so \
+		$(STAGING_DIR)/usr/lib/libmosquittopp.so.* \
+		$(STAGING_DIR)/usr/lib/libmosquittopp.a \
+		$(STAGING_DIR)/usr/lib/pkgconfig/libmosquittopp.pc \
+		$(STAGING_DIR)/usr/include/mosquittopp.h
 endef
 
 define THINGINO_MOSQUITTO_20X_INSTALL_TARGET_CMDS
@@ -64,6 +70,12 @@ define THINGINO_MOSQUITTO_20X_INSTALL_TARGET_CMDS
 		DIRS="$(THINGINO_MOSQUITTO_20X_MAKE_DIRS)" \
 		$(THINGINO_MOSQUITTO_20X_MAKE_OPTS) \
 		DESTDIR=$(TARGET_DIR) install
+	rm -f \
+		$(TARGET_DIR)/usr/lib/libmosquittopp.so \
+		$(TARGET_DIR)/usr/lib/libmosquittopp.so.* \
+		$(TARGET_DIR)/usr/lib/libmosquittopp.a \
+		$(TARGET_DIR)/usr/lib/pkgconfig/libmosquittopp.pc \
+		$(TARGET_DIR)/usr/include/mosquittopp.h
 	rm -f $(TARGET_DIR)/etc/mosquitto/*.example
 	$(THINGINO_MOSQUITTO_20X_INSTALL_TARGET_CONF)
 endef
@@ -84,6 +96,27 @@ endef
 define THINGINO_MOSQUITTO_20X_USERS
 	mosquitto -1 mosquitto -1 * - - - Mosquitto user
 endef
+endif
+
+ifeq ($(BR2_PACKAGE_THINGINO_WEBUI),y)
+THINGINO_MOSQUITTO_20X_DEPENDENCIES += thingino-webui
+
+define THINGINO_MOSQUITTO_20X_INSTALL_WEBUI
+	$(INSTALL) -d $(TARGET_DIR)/var/www/a
+	$(INSTALL) -d $(TARGET_DIR)/var/www/x
+	$(INSTALL) -d $(TARGET_DIR)/var/www/a/plugins
+	$(INSTALL) -D -m 0644 $(THINGINO_MOSQUITTO_20X_PKGDIR)/files/www/tool-mqtt-sub.html \
+		$(TARGET_DIR)/var/www/tool-mqtt-sub.html
+	$(INSTALL) -D -m 0644 $(THINGINO_MOSQUITTO_20X_PKGDIR)/files/www/a/tool-mqtt-sub.js \
+		$(TARGET_DIR)/var/www/a/tool-mqtt-sub.js
+	$(INSTALL) -D -m 0755 $(THINGINO_MOSQUITTO_20X_PKGDIR)/files/www/x/json-config-mqtt-sub.cgi \
+		$(TARGET_DIR)/var/www/x/json-config-mqtt-sub.cgi
+	$(INSTALL) -D -m 0755 $(THINGINO_MOSQUITTO_20X_PKGDIR)/files/www/x/mqtt-sub-restart.cgi \
+		$(TARGET_DIR)/var/www/x/mqtt-sub-restart.cgi
+	$(INSTALL) -D -m 0644 $(THINGINO_MOSQUITTO_20X_PKGDIR)/files/mqtt-sub.webui.json \
+		$(TARGET_DIR)/var/www/a/plugins/mqtt-sub.webui.json
+endef
+THINGINO_MOSQUITTO_20X_POST_INSTALL_TARGET_HOOKS += THINGINO_MOSQUITTO_20X_INSTALL_WEBUI
 endif
 
 $(eval $(generic-package))

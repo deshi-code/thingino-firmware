@@ -1,10 +1,11 @@
 #!/bin/sh
+# shellcheck disable=SC1091,SC2034,SC2329,SC3043
 
 # Check authentication
 . /var/www/x/auth.sh
 require_auth
 
-TAB_LIST="crontab dmesg logcat logread lsmod netstat release onvif prudynt status thingino top weblog"
+TAB_LIST="crontab dmesg logcat logread lsmod netstat release onvif prudynt raptor status thingino top weblog"
 
 button_restore_from_rom() {
 	[ -f "/rom/$1" ] || return 1
@@ -139,6 +140,10 @@ EOF
 		prudynt)
 			cmd="cat /etc/prudynt.json"
 			extras=$(button_restore_from_rom "/etc/prudynt.json")
+			;;
+		raptor)
+			cmd="cat /etc/raptor.conf"
+			extras=$(button_restore_from_rom "/etc/raptor.conf")
 			;;
 		release)
 			cmd="cat /etc/os-release"

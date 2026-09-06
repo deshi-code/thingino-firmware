@@ -1,7 +1,7 @@
 INGENIC_LIB_SITE_METHOD = git
 INGENIC_LIB_SITE = https://github.com/gtxaspec/ingenic-lib
 INGENIC_LIB_SITE_BRANCH = master
-INGENIC_LIB_VERSION = 9bfe42f4a20c65eefd33c509abfa38e383b4119f
+INGENIC_LIB_VERSION = 99ed33fd55fdf4fdfaa378a0924c5c6a7a31943b
 INGENIC_LIB_INSTALL_STAGING = YES
 
 INGENIC_LIB_LICENSE = GPL-2.0
@@ -70,15 +70,17 @@ endif
 
 ACCEL_DIR = $(@D)/acceleration-modules
 
-# Staging: install core libs for linking (skip libsysutils on a1)
+# Staging: install core libs for linking (libsysutils only when selected)
 define INGENIC_LIB_INSTALL_STAGING_CMDS
 	$(INSTALL) -D -m 0644 $(SDK_LIB_DIR)/libimp.so \
 		$(STAGING_DIR)/usr/lib/libimp.so
 	$(INSTALL) -D -m 0644 $(LIBALOG_FILE) \
 		$(STAGING_DIR)/usr/lib/libalog.so
-	$(if $(filter-out a1,$(SOC_FAMILY)),\
+	$(if $(BR2_PACKAGE_INGENIC_LIB_LIBSYSUTILS),\
+		$(if $(filter-out a1,$(SOC_FAMILY)),\
 		$(INSTALL) -D -m 0644 $(SDK_LIB_DIR)/libsysutils.so \
 			$(STAGING_DIR)/usr/lib/libsysutils.so \
+		) \
 	)
 	$(if $(BR2_PACKAGE_INGENIC_LIB_AUDIOPROCESS),\
 		$(INSTALL) -D -m 0644 $(SDK_LIB_DIR)/libaudioProcess.so \
@@ -93,6 +95,10 @@ define INGENIC_LIB_INSTALL_STAGING_CMDS
 		$(INSTALL) -m 0644 -t $(STAGING_DIR)/usr/lib/ \
 			$(ACCEL_DIR)/ivs/lib/$(SDK_LIBC_VERSION)/IVS/$(SDK_LIBC_NAME)/libpersonDet_inf.so \
 			$(ACCEL_DIR)/ivs/lib/$(SDK_LIBC_VERSION)/IVS/$(SDK_LIBC_NAME)/libjzdl.so \
+			$(ACCEL_DIR)/ivs/lib/$(SDK_LIBC_VERSION)/MXU/$(SDK_LIBC_NAME)/libmxu_core.so \
+			$(ACCEL_DIR)/ivs/lib/$(SDK_LIBC_VERSION)/MXU/$(SDK_LIBC_NAME)/libmxu_imgproc.so \
+			$(ACCEL_DIR)/ivs/lib/$(SDK_LIBC_VERSION)/MXU/$(SDK_LIBC_NAME)/libmxu_merge.so \
+			$(ACCEL_DIR)/ivs/lib/$(SDK_LIBC_VERSION)/MXU/$(SDK_LIBC_NAME)/libmxu_video.so \
 	)
 endef
 
@@ -125,6 +131,10 @@ define INGENIC_LIB_INSTALL_TARGET_CMDS
 		$(INSTALL) -m 0644 -t $(TARGET_DIR)/usr/lib/ \
 			$(ACCEL_DIR)/ivs/lib/$(SDK_LIBC_VERSION)/IVS/$(SDK_LIBC_NAME)/libpersonDet_inf.so \
 			$(ACCEL_DIR)/ivs/lib/$(SDK_LIBC_VERSION)/IVS/$(SDK_LIBC_NAME)/libjzdl.so \
+			$(ACCEL_DIR)/ivs/lib/$(SDK_LIBC_VERSION)/MXU/$(SDK_LIBC_NAME)/libmxu_core.so \
+			$(ACCEL_DIR)/ivs/lib/$(SDK_LIBC_VERSION)/MXU/$(SDK_LIBC_NAME)/libmxu_imgproc.so \
+			$(ACCEL_DIR)/ivs/lib/$(SDK_LIBC_VERSION)/MXU/$(SDK_LIBC_NAME)/libmxu_merge.so \
+			$(ACCEL_DIR)/ivs/lib/$(SDK_LIBC_VERSION)/MXU/$(SDK_LIBC_NAME)/libmxu_video.so \
 	)
 endef
 
