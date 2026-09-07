@@ -11,6 +11,7 @@ define THINGINO_KOPT_PREPARE_KERNEL
 	sh $(BR2_EXTERNAL_THINGINO_PATH)/scripts/patch_kernel_leds_board_base.sh \
 		$(THINGINO_LED_BOARD_BASE)
 endef
+LINUX_PRE_BUILD_HOOKS += THINGINO_KOPT_PREPARE_KERNEL
 
 # Per-device dts from the camera profile dir (CAMERA_DTS_FILE/DEST come
 # from thingino.mk). Copied before every kernel build, so a profile

@@ -10,7 +10,7 @@
 #   ./build-container.sh menuconfig # Run menuconfig in container
 #   ./build-container.sh shell      # Open interactive shell
 #   ./build-container.sh clean      # Clean build in container
-#   ./build-container.sh nuke       # Destroy all container images and dl cache
+#   ./build-container.sh nuke       # Destroy all container images, dl cache, and build output cache
 #   ./build-container.sh ota        # Upgrade firmware OTA
 #
 
@@ -363,10 +363,10 @@ case "$CMD" in
         ;;
     images)
         print_info "Locating built firmware images..."
-        if [ -d "output-stable" ]; then
-            find output-stable -name "thingino-*.bin" -type f -exec ls -lh {} \;
+        if [ -d "output" ]; then
+            find output -name "thingino-*.bin" -type f -exec ls -lh {} \;
         else
-            print_error "No output-stable directory found. Have you built firmware yet?"
+            print_error "No output directory found. Have you built firmware yet?"
         fi
         ;;
     rebuild-image)

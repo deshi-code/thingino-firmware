@@ -12,6 +12,20 @@ DL_CONTAINER := thingino-dl-cache
 # Directories
 WORKSPACE_DIR := $(shell pwd)
 
+# Buildroot's per-package build isolation (BR2_PER_PACKAGE_DIRECTORIES) hard-links
+# files - including compatibility symlinks like host/usr and host/lib64 - between
+# per-package directories. That breaks on Docker Desktop for Mac/Windows, where
+# /workspace is a bind mount (virtiofs/osxfs) onto a host filesystem (APFS, NTFS)
+# that can't hard-link symlinks. So the build output tree gets its own
+# container-native volume instead of living under the /workspace bind mount; see
+# THINGINO_OUTPUT_ROOT_DIR below. One volume per workspace path, so multiple
+# checkouts on the same machine don't share (and clobber) build output.
+OUTPUT_VOLUME := thingino-output-$(shell printf '%s' "$(WORKSPACE_DIR)" | cksum | cut -d' ' -f1)
+CONTAINER_OUTPUT_DIR := /build-output
+# Finished artifacts (images/, logs/, .config*) are copied back onto the bind
+# mount after a successful build - see scripts/container-sync-output.sh.
+CONTAINER_SYNC_OUTPUT := /workspace/scripts/container-sync-output.sh
+
 # SELinux volume labels (Podman/Docker on Fedora, Bazzite, RHEL, CentOS Stream).
 # Without a label, Enforcing hosts often fail with "Permission denied" on bind mounts.
 # Non-SELinux hosts (Debian/Ubuntu/etc.) leave this empty — :z/:Z are unnecessary there.
@@ -52,9 +66,12 @@ CONTAINER_RUN_OPTS := \
 	--volumes-from $(DL_CONTAINER) \
 	-v $(WORKSPACE_DIR):/workspace$(CONTAINER_VOLUME_SUFFIX) \
 	-v $(shell readlink -f overrides):/overrides$(CONTAINER_VOLUME_SUFFIX) \
+	-v $(OUTPUT_VOLUME):$(CONTAINER_OUTPUT_DIR) \
 	-w /workspace \
 	-e TERM=xterm-256color \
-	-e BR2_DL_DIR=/dl
+	-e BR2_DL_DIR=/dl \
+	-e THINGINO_OUTPUT_ROOT_DIR=$(CONTAINER_OUTPUT_DIR) \
+	-e HOME=$(CONTAINER_OUTPUT_DIR)
 
 # Mount external THINGINO_USER_DIR into container if set outside workspace.
 # Default (user/ inside workspace) is already visible via the workspace mount.
@@ -78,7 +95,7 @@ endif
 
 # Workaround: prebuilt image ships uutils install which breaks Buildroot dep check.
 # Switch to GNU install on every container invocation.
-CONTAINER_PREBUILD := sudo update-alternatives --install /usr/bin/install install /usr/bin/gnuinstall 100 2>/dev/null && true &&
+CONTAINER_PREBUILD := sudo update-alternatives --install /usr/bin/install install /usr/bin/gnuinstall 100 2>/dev/null; true &&
 
 # Interactive container
 CONTAINER_RUN_INTERACTIVE := $(CONTAINER_RUN) -it $(CONTAINER_RUN_OPTS) $(USER_DIR_MOUNT)
@@ -94,20 +111,30 @@ container-pull: dl-container
 	else \
 		echo "Container image $(CONTAINER_IMAGE):$(CONTAINER_TAG) already present"; \
 	fi
+	@$(MAKE) -f Makefile.container output-volume CONTAINER_ENGINE=$(CONTAINER_ENGINE)
+	@$(MAKE) -f Makefile.container dl-volume-perms CONTAINER_ENGINE=$(CONTAINER_ENGINE)
+
+# Named volumes are created root:root by the engine; our containers run as the
+# host UID/GID (see CONTAINER_RUN), so it needs to be chowned once up front.
+# Safe to re-run: chowning already-correct ownership is a no-op. Uses the
+# already-pulled builder image rather than adding a new one to fetch.
+.PHONY: output-volume
+output-volume:
+	@$(CONTAINER_ENGINE) volume inspect $(OUTPUT_VOLUME) >/dev/null 2>&1 || \
+		$(CONTAINER_ENGINE) volume create $(OUTPUT_VOLUME) >/dev/null
+	@$(CONTAINER_ENGINE) run --rm --user root -v $(OUTPUT_VOLUME):$(CONTAINER_OUTPUT_DIR) \
+		$(CONTAINER_IMAGE):$(CONTAINER_TAG) chown $(USER_ID):$(GROUP_ID) $(CONTAINER_OUTPUT_DIR)
 
 .PHONY: dl-pull
 dl-pull:
-	$(CONTAINER_ENGINE) pull $(DL_IMAGE):latest || \
+	$(CONTAINER_ENGINE) pull --platform linux/amd64 $(DL_IMAGE):latest || \
 		echo "Warning: Could not pull dl cache image. Downloads will be needed."
 
 .PHONY: dl-container
 dl-container: dl-pull
 	@if ! $(CONTAINER_ENGINE) ps -a --format '{{.Names}}' | grep -q '^$(DL_CONTAINER)$$'; then \
 		echo "Creating dl cache helper container..."; \
-		$(CONTAINER_ENGINE) create --name $(DL_CONTAINER) $(DL_IMAGE):latest /bin/true; \
-		$(CONTAINER_ENGINE) create --name $(DL_CONTAINER)-src $(DL_IMAGE):latest /bin/true; \
-		$(CONTAINER_ENGINE) export $(DL_CONTAINER)-src | tar -x --strip-components=1 --directory=$$($(CONTAINER_ENGINE) inspect $(DL_CONTAINER) --format '{{range .Mounts}}{{if eq .Destination "/dl"}}{{.Source}}{{end}}{{end}}') dl/; \
-		$(CONTAINER_ENGINE) rm $(DL_CONTAINER)-src >/dev/null; \
+		$(CONTAINER_ENGINE) create --platform linux/amd64 --name $(DL_CONTAINER) $(DL_IMAGE):latest /bin/true; \
 		echo "dl cache volume populated"; \
 	else \
 		echo "dl cache helper container already exists"; \
@@ -116,6 +143,16 @@ dl-container: dl-pull
 .PHONY: dl-clean
 dl-clean:
 	$(CONTAINER_ENGINE) rm -f $(DL_CONTAINER) || true
+
+# The dl cache volume is auto-populated from the DL_IMAGE as root:root. Existing
+# cached downloads stay world-readable (fine for our non-root build user), but
+# writing a *new* download (a package not already in the prebuilt cache) needs
+# /dl itself to be writable - hence the (non-recursive, existing content is left
+# alone) chown here, same reasoning as output-volume above.
+.PHONY: dl-volume-perms
+dl-volume-perms:
+	@$(CONTAINER_ENGINE) run --rm --user root --volumes-from $(DL_CONTAINER) \
+		$(CONTAINER_IMAGE):$(CONTAINER_TAG) chown $(USER_ID):$(GROUP_ID) /dl
 
 .PHONY: container-shell
 container-shell: container-pull
@@ -136,7 +173,7 @@ container-make: container-pull
 	@echo '    exit 130' >> /tmp/container-make-run.sh
 	@echo '}' >> /tmp/container-make-run.sh
 	@echo 'trap cleanup INT TERM' >> /tmp/container-make-run.sh
-	@echo '$(CONTAINER_RUN_EXEC) $(CONTAINER_IMAGE):$(CONTAINER_TAG) bash -c "$(CONTAINER_PREBUILD) make $(CAMERA_ARG) $(GROUP_ARG) $(IP_ARG) $(MAKECMDGOALS)" &' >> /tmp/container-make-run.sh
+	@echo '$(CONTAINER_RUN_EXEC) $(CONTAINER_IMAGE):$(CONTAINER_TAG) bash -c "$(CONTAINER_PREBUILD) make $(CAMERA_ARG) $(GROUP_ARG) $(IP_ARG) $(MAKECMDGOALS) && $(CONTAINER_SYNC_OUTPUT)" &' >> /tmp/container-make-run.sh
 	@echo 'wait $$!' >> /tmp/container-make-run.sh
 	@chmod +x /tmp/container-make-run.sh
 	@/tmp/container-make-run.sh
@@ -168,6 +205,7 @@ container-info:
 	@echo "  DL Image:   $(DL_IMAGE):latest"
 	@echo "  DL Cache:   $(DL_CONTAINER)"
 	@echo "  DL Source:  container volume"
+	@echo "  Output Vol: $(OUTPUT_VOLUME) -> $(CONTAINER_OUTPUT_DIR) (synced to $(WORKSPACE_DIR)/output after a successful build)"
 	@echo "  User ID:    $(USER_ID)"
 	@echo "  Group ID:   $(GROUP_ID)"
 	@echo "  Workspace:  $(WORKSPACE_DIR)"
@@ -178,11 +216,11 @@ container-info:
 # Convenience targets for building in container
 .PHONY: container-build-firmware
 container-build-firmware: container-pull
-	$(CONTAINER_RUN_EXEC) $(CONTAINER_IMAGE):$(CONTAINER_TAG) bash -c "$(CONTAINER_PREBUILD) make"
+	$(CONTAINER_RUN_EXEC) $(CONTAINER_IMAGE):$(CONTAINER_TAG) bash -c "$(CONTAINER_PREBUILD) make && $(CONTAINER_SYNC_OUTPUT)"
 
 .PHONY: container-dev
 container-dev: container-pull
-	$(CONTAINER_RUN_EXEC) $(CONTAINER_IMAGE):$(CONTAINER_TAG) bash -c "$(CONTAINER_PREBUILD) make dev"
+	$(CONTAINER_RUN_EXEC) $(CONTAINER_IMAGE):$(CONTAINER_TAG) bash -c "$(CONTAINER_PREBUILD) make dev && $(CONTAINER_SYNC_OUTPUT)"
 
 .PHONY: container-menuconfig
 container-menuconfig: container-pull
@@ -198,7 +236,7 @@ container-busybox-menuconfig: container-pull
 
 .PHONY: container-clean-build
 container-clean-build: container-pull
-	$(CONTAINER_RUN_EXEC) $(CONTAINER_IMAGE):$(CONTAINER_TAG) bash -c "$(CONTAINER_PREBUILD) make distclean && make"
+	$(CONTAINER_RUN_EXEC) $(CONTAINER_IMAGE):$(CONTAINER_TAG) bash -c "$(CONTAINER_PREBUILD) make distclean && make && $(CONTAINER_SYNC_OUTPUT)"
 
 .PHONY: container-ota
 container-ota: container-pull
