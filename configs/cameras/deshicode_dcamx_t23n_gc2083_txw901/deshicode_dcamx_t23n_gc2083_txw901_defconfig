@@ -29,4 +29,25 @@ BR2_THINGINO_BUTTON=y
 # option.
 BR2_THINGINO_SDCARD=y
 
+# Pan/Tilt Motors
+# GPIO pins/order are set via motors.gpio_pan/gpio_tilt in thingino.json, not
+# a Kconfig option. steps_pan/steps_tilt/speed_* in thingino.json are still
+# placeholder defaults - not yet calibrated against this unit's actual
+# mechanical travel range.
+BR2_THINGINO_MOTORS=y
+BR2_THINGINO_MOTORS_TCU=y
+
+# Raptor streamer - live viewing only (RTSP + WebRTC). RAPTOR_FULL builds
+# every daemon by default (recording, motion detection, RTMP push, USB
+# webcam, WebTorrent) whether used or not, competing with RVD/RWD for CPU
+# on every real-time encode. Trimmed to just what's actually used; RIC stays
+# on since it's the day/night IR-CUT controller, unrelated to streaming.
+# BR2_PACKAGE_THINGINO_RAPTOR_FULL=n
+# BR2_PACKAGE_THINGINO_RAPTOR_RVD=y
+# BR2_PACKAGE_THINGINO_RAPTOR_RSD=y
+# BR2_PACKAGE_THINGINO_RAPTOR_RAD=y
+# BR2_PACKAGE_THINGINO_RAPTOR_ROD=y
+# BR2_PACKAGE_THINGINO_RAPTOR_RIC=y
+# BR2_PACKAGE_THINGINO_RAPTOR_WEBRTC=y
+
 
