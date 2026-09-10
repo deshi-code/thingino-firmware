@@ -16,6 +16,13 @@ Flash Size: 16MB
 | IR CUT | IRCUT | 57 | Active High | 3.3 | Goes into the motor driver's ain |
 | IR CUT | IRCUT | 58 | Active High | 3.3 | Goes into the motor drivers' bin |
 | Speaker | SPK | 7 | - | - | Got it from the [Chinese Firmware bin.](findings) |
+| Reset Button | RST | 50 | Active Low, pull-up | 3.3 | Found by GPIO scan: idle high, pulled low while held. |
+| SD Card Detect | CD | 49 | Active Low, pull-up | 3.3 | Found by GPIO scan: high with no card, low with card inserted. |
+| Sensor Reset | - | 18 | Active High | 3.3 | GC2083 reset line. Already found/driven by the kernel's own `sensor_reset` driver (`BR2_PACKAGE_THINGINO_RAPTOR_CONF_SENSOR_RST_GPIO` auto-detect) - nothing to configure. |
+
+**Siren**: still unknown. `play /usr/share/sounds/chime_1.opus` was tested as a "maybe it's just the
+amp output on the jack" theory - ruled out, the sound came from the onboard speaker, not the
+jack-connected siren. So it is a separate trigger, not piggybacking on GPIO 7. Still to find.
 
 
 

@@ -23,7 +23,10 @@ WORKSPACE_DIR := $(shell pwd)
 OUTPUT_VOLUME := thingino-output-$(shell printf '%s' "$(WORKSPACE_DIR)" | cksum | cut -d' ' -f1)
 CONTAINER_OUTPUT_DIR := /build-output
 # Finished artifacts (images/, logs/, .config*) are copied back onto the bind
-# mount after a successful build - see scripts/container-sync-output.sh.
+# mount after a successful build - see scripts/container-sync-output.sh. That
+# script also drops the flashable firmware .bin and the two U-Boot images at
+# the repo root, so the latest build is always there without digging through
+# output/.
 CONTAINER_SYNC_OUTPUT := /workspace/scripts/container-sync-output.sh
 
 # SELinux volume labels (Podman/Docker on Fedora, Bazzite, RHEL, CentOS Stream).
@@ -205,7 +208,7 @@ container-info:
 	@echo "  DL Image:   $(DL_IMAGE):latest"
 	@echo "  DL Cache:   $(DL_CONTAINER)"
 	@echo "  DL Source:  container volume"
-	@echo "  Output Vol: $(OUTPUT_VOLUME) -> $(CONTAINER_OUTPUT_DIR) (synced to $(WORKSPACE_DIR)/output after a successful build)"
+	@echo "  Output Vol: $(OUTPUT_VOLUME) -> $(CONTAINER_OUTPUT_DIR) (synced to $(WORKSPACE_DIR)/output, firmware+u-boot images also copied to $(WORKSPACE_DIR)/ after a successful build)"
 	@echo "  User ID:    $(USER_ID)"
 	@echo "  Group ID:   $(GROUP_ID)"
 	@echo "  Workspace:  $(WORKSPACE_DIR)"

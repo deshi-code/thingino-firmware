@@ -1,6 +1,7 @@
 {
   "gpio": {
-    "mmc_cd": -1,
+    "mmc_cd": 49,
+    "button_reset": 50,
     "ir850": 59,
     "ircut": "57 58",
     "speaker": 7

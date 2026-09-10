@@ -30,6 +30,13 @@ __pycache__/
 /user
 /output
 /overrides
+
+# Firmware images the docker build drops at repo root after a successful
+# build (see scripts/container-sync-output.sh) - rebuilt every time, not
+# meant to be committed.
+/thingino-*.bin
+/u-boot-with-tpl-lzma.bin
+/u-boot-env.bin
 /package/thingino-webui/files/var/www/onvif/*_files
 /package/thingino-webui/files/var/www/onvif/*_service
 /retired
